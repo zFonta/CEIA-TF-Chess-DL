@@ -34,3 +34,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Pone la raiz del repo en sys.path para la corrida de tests. Sin esto,
+# `from tests.conftest import ...` solo funciona cuando el interprete ya
+# tiene el cwd en sys.path, que no es el caso en todos los entornos.
+pythonpath = ["."]
