@@ -1,0 +1,38 @@
+# Datos y artefactos pesados: van a Hugging Face, nunca a Git.
+# Los patrones van anclados a la raiz con "/": sin eso, "data/" tambien
+# ignoraria el paquete src/chessdl/data/.
+/data/
+/shards/
+*.parquet
+*.pgn
+*.pgn.zst
+*.pt
+*.ckpt
+!tests/fixtures/*.pgn
+
+# Binario de Stockfish (se descarga con scripts/setup_stockfish.sh)
+/bin/
+/stockfish*
+
+# Estado de reanudacion del pipeline
+state.json
+*.state.json
+
+# Secretos
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Sistema
+.DS_Store

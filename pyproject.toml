@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chessdl"
+version = "0.1.0"
+description = "Chess position evaluation and optimal move selection with deep learning (CEIA-FIUBA final project)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Federico Santiago Fontanari" }]
+
+dependencies = [
+    "chess>=1.11",
+    "numpy>=1.24",
+    "pyarrow>=14.0",
+    "pyyaml>=6.0",
+    "zstandard>=0.22",
+    "requests>=2.31",
+    "tqdm>=4.66",
+    "huggingface_hub>=0.23",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+chessdl-build-dataset = "chessdl.scripts.build_dataset:main"
+chessdl-validate-dataset = "chessdl.scripts.validate_dataset:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

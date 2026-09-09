@@ -1,0 +1,674 @@
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0000"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_0"]
+[Black "player_b_0"]
+[Result "1-0"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. Nc3 Nc6 2. Nh3 f5 3. Nd5 f4 4. Nxe7 Ncxe7 5. Ng5 h6 6. b4 a5 7. e3 g6 8. c3
+Nc6 9. Bd3 Qe7 10. Qf3 axb4 11. Qg3 Rh7 12. e4 Nd4 13. Bc2 Ne6 14. a3 Qf6 15.
+a4 d6 16. h3 Rh8 17. Rh2 Be7 18. Qg4 Kd7 19. h4 Kd8 20. d3 b3 21. Nh7 Kd7 22.
+Qxf4 Rxa4 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0001"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_1"]
+[Black "player_b_1"]
+[Result "1-0"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. g3 h6 2. e4 d5 3. Bd3 dxe4 4. c4 g6 5. h3 e6 6. Qa4+ Nd7 7. Qxa7 Bc5 8. Qa4
+Bb4 9. Qa3 Bf8 10. b3 Nb6 11. Qe7+ Qxe7 12. Nf3 Qg5 13. Ba3 Qf4 14. gxf4 Ra7
+15. Kf1 Nd5 16. Bxe4 f5 17. Nd4 Ra4 18. Ke2 Nb6 19. Nc2 Be7 20. h4 Rh7 21. Rg1
+h5 22. Bc5 Nxc4 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0002"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_2"]
+[Black "player_b_2"]
+[Result "1-0"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. h4 h5 2. e3 a5 3. Na3 f5 4. b4 Nh6 5. Nc4 c6 6. d4 Ra7 7. Qg4 Qc7 8. a3 Qd6
+9. Ne5 Nxg4 10. Nef3 Qg6 11. Bd3 Ra8 12. Kd2 Nh6 13. d5 Na6 14. g4 Qh7 15. Kc3
+Nxb4 16. d6 a4 17. Bb2 e5 18. Nh3 Na6 19. Nxe5 fxg4 20. Ng1 Ng8 21. Rb1 Nc7 22.
+Kc4 Nb5 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0003"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_3"]
+[Black "player_b_3"]
+[Result "1/2-1/2"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. h3 Nc6 2. Nf3 Nb8 3. c3 f6 4. Qa4 a5 5. Na3 Ra6 6. Ng1 c6 7. Rh2 Kf7 8. Nb5
+d6 9. Qa3 g5 10. Rb1 c5 11. Ra1 Bxh3 12. d4 Bg4 13. Nxd6+ Kg7 14. Rxh7+ Kg6 15.
+Rb1 Ra7 16. Rh2 Qxd6 17. Qxa5 Na6 18. Be3 f5 19. b4 Rh7 20. Qxa6 cxb4 21. a4
+Qc6 22. d5 Bf3 1/2-1/2
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0004"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_4"]
+[Black "player_b_4"]
+[Result "0-1"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. a3 e5 2. Nc3 g5 3. Nd5 Nc6 4. f3 Qe7 5. Nxe7 Rb8 6. g4 f6 7. Nxg8 Be7 8.
+Nxe7 a5 9. e3 h6 10. Ba6 Kxe7 11. Ne2 Rg8 12. Ng3 Kd6 13. h4 e4 14. a4 b6 15.
+Ne2 Nb4 16. Nd4 Nd5 17. Bxc8 Re8 18. Ke2 Rbxc8 19. Rb1 Ne7 20. hxg5 fxg5 21.
+Nf5+ Nxf5 22. Qg1 Kc5 0-1
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0005"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_5"]
+[Black "player_b_5"]
+[Result "1/2-1/2"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. Nh3 h6 2. a3 g5 3. d3 e6 4. Kd2 Nf6 5. c4 Ng4 6. b3 Na6 7. Nc3 f6 8. e3 c5
+9. g3 Qb6 10. d4 e5 11. Na4 Qa5+ 12. Kc2 Qc3+ 13. Kb1 Bd6 14. Bg2 Nb4 15. Qd3
+Nc2 16. Qh7 f5 17. Be4 Bf8 18. Bd5 b6 19. Nxb6 Qb4 20. Bc6 Nxf2 21. Qxf5 exd4
+22. Qe4+ Nxe4 1/2-1/2
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0006"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_6"]
+[Black "player_b_6"]
+[Result "1-0"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. f4 Nh6 2. a3 g6 3. f5 Nxf5 4. h4 Ne3 5. Rh2 Bh6 6. d4 d5 7. b4 g5 8. b5
+Nxg2+ 9. Kd2 Bf5 10. e4 Nc6 11. Kd3 Bg4 12. Rh3 Bf5 13. Rh1 Rb8 14. Ra2 Nb4+
+15. Ke2 Qd6 16. Nc3 Qe6 17. Kd2 O-O 18. Nce2 Na6 19. h5 c6 20. Ng3 dxe4 21. Rh2
+Nh4 22. Kc3 Bg6 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0007"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_7"]
+[Black "player_b_7"]
+[Result "0-1"]
+[WhiteElo "2300"]
+[BlackElo "2410"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. f4 e5 2. h4 b5 3. Nh3 Na6 4. Kf2 exf4 5. Kf3 Nb4 6. Ng5 Qxg5 7. g4 h5 8. a3
+Kd8 9. Rg1 Bc5 10. Rg3 d6 11. hxg5 Na2 12. Rg1 Rb8 13. Rg3 f5 14. b3 a6 15.
+gxh5 Be6 16. Rg4 Rh7 17. d4 Kd7 18. Be3 Bxb3 19. Bc1 Bxa3 20. Rxa2 Bxc1 21. Rg2
+Nh6 22. g6 Kc8 0-1
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/fixture0008"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_8"]
+[Black "player_b_8"]
+[Result "0-1"]
+[WhiteElo "2250"]
+[BlackElo "2200"]
+[TimeControl "600+5"]
+[Termination "Normal"]
+
+1. g4 d5 2. Na3 c5 3. Nb1 Na6 4. a3 Nc7 5. d3 e6 6. c3 Be7 7. Bg2 Bd7 8. Be3
+Nh6 9. c4 O-O 10. h4 Bc8 11. Kd2 Qd7 12. Be4 Bd6 13. Qe1 d4 14. Bxb7 Be7 15.
+Qc1 Qb5 16. Ba6 Bf6 17. Ke1 Bxa6 18. Rh2 Qd7 19. f4 Nf5 20. Nf3 Bd8 21. Qc2 Nh6
+22. Rg2 Bb5 23. b4 dxe3 24. Rh2 f6 25. Qa4 Bxa4 26. Rh3 Nxg4 0-1
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/fixture0009"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_9"]
+[Black "player_b_9"]
+[Result "1-0"]
+[WhiteElo "2250"]
+[BlackElo "2200"]
+[TimeControl "600+5"]
+[Termination "Normal"]
+
+1. Nc3 e5 2. h3 d5 3. f3 d4 4. a4 c6 5. f4 Qf6 6. fxe5 Bd7 7. b3 Ba3 8. e6 Kd8
+9. e7+ Kxe7 10. d3 Qh6 11. Rxa3 Qh4+ 12. g3 Qe4 13. Kf2 Nf6 14. Bh6 Be8 15. Qa1
+g6 16. Bg2 Ng4+ 17. Kf1 Nxh6 18. Qc1 a6 19. Nxe4 f5 20. Qd1 Ng4 21. Nf3 b5 22.
+Ra1 Ra7 23. c4 b4 24. Qc1 Bd7 25. Nfd2 a5 26. Kg1 c5 1-0
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/fixture0010"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_10"]
+[Black "player_b_10"]
+[Result "0-1"]
+[WhiteElo "2250"]
+[BlackElo "2200"]
+[TimeControl "600+5"]
+[Termination "Normal"]
+
+1. Na3 b6 2. b3 f6 3. g3 b5 4. Rb1 h5 5. d4 Rh7 6. Bh3 b4 7. Nb5 e5 8. Be6 Be7
+9. Qd3 g6 10. Bc4 f5 11. Kd1 Bf8 12. g4 Re7 13. Nd6+ cxd6 14. Qg3 Nf6 15. Qc3
+Ne4 16. Bf4 Bg7 17. Bg3 Nd2 18. Rb2 exd4 19. Qf3 Rxe2 20. Qd5 Qf6 21. Ba6 Qg5
+22. h4 Kd8 23. Be5 Bxa6 24. Qxa8 Kc7 25. Qxb8+ Kc6 26. f4 Rf2 0-1
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/fixture0011"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_11"]
+[Black "player_b_11"]
+[Result "1/2-1/2"]
+[WhiteElo "2250"]
+[BlackElo "2200"]
+[TimeControl "600+5"]
+[Termination "Normal"]
+
+1. g4 Nc6 2. c4 f5 3. e3 a6 4. Qc2 Na7 5. e4 Nb5 6. Qc3 fxe4 7. Qd3 b6 8. g5 e5
+9. Ne2 Bb7 10. c5 Qc8 11. Qc4 d5 12. Qb3 bxc5 13. Qd1 Nc3 14. bxc3 h5 15. a4 g6
+16. c4 Rh7 17. Bg2 Kf7 18. Ra3 Kg7 19. a5 Qh3 20. Bxe4 Qg2 21. Qc2 Qh3 22. Qb3
+Ra7 23. Ra1 Nf6 24. Ra3 Qg2 25. Nec3 Qg1+ 26. Rxg1 Ba8 1/2-1/2
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/fixture0012"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_12"]
+[Black "player_b_12"]
+[Result "1/2-1/2"]
+[WhiteElo "2250"]
+[BlackElo "2200"]
+[TimeControl "600+5"]
+[Termination "Normal"]
+
+1. f4 e6 2. Nc3 c6 3. Nh3 Qc7 4. a4 d5 5. g3 h6 6. Nxd5 Qe5 7. e3 Rh7 8. Qe2 b6
+9. d3 Na6 10. Qg2 Qd4 11. Nb4 Ke7 12. Qd5 Nxb4 13. Qxc6 a6 14. Qf3 Qc5 15. Qd5
+Na2 16. Qc6 Rb8 17. Bd2 Bb7 18. c4 Qh5 19. Qe4 Kd8 20. Bc3 Nb4 21. c5 Kc7 22.
+Rd1 Rc8 23. Qf3 Qxh3 24. c6 Kd6 25. Bg2 Ba8 26. c7 Qh4 1/2-1/2
+
+[Event "Rated Rapid game"]
+[Site "https://lichess.org/fixture0013"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_13"]
+[Black "player_b_13"]
+[Result "1/2-1/2"]
+[WhiteElo "2250"]
+[BlackElo "2200"]
+[TimeControl "600+5"]
+[Termination "Normal"]
+
+1. a4 Nf6 2. f3 Na6 3. g3 Ne4 4. Bg2 e6 5. d4 Nb8 6. a5 f5 7. d5 Nf6 8. Ra4 g5
+9. Qd2 a6 10. Nc3 b5 11. Na2 exd5 12. Qe3+ Qe7 13. Kd1 Qe5 14. Bh3 Ba3 15.
+Qxe5+ Kf7 16. Rg4 f4 17. Qxf4 b4 18. Nc3 Bxb2 19. Qxc7 Ng8 20. Qa7 b3 21. Bxg5
+bxc2+ 22. Kd2 Ba1 23. Qd4 Ne7 24. Qg7+ Ke8 25. Qxh7 Nbc6 26. Ke1 Nd4 1/2-1/2
+
+[Event "Rated Classical game"]
+[Site "https://lichess.org/fixture0014"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_14"]
+[Black "player_b_14"]
+[Result "0-1"]
+[WhiteElo "2500"]
+[BlackElo "2480"]
+[TimeControl "1800+20"]
+[Termination "Normal"]
+
+1. c3 f5 2. g3 Nf6 3. Qa4 a5 4. Qb5 g6 5. Qd3 e6 6. f4 Ra6 7. a3 c6 8. g4 Bxa3
+9. bxa3 Qe7 10. Qf3 h5 11. e4 Qxa3 12. d3 Nd5 13. Qg3 b5 14. Kf2 Nxf4 15. gxh5
+e5 16. Qxg6+ Kd8 17. Kg3 Ra8 18. Qh7 d5 19. Kf2 Qxc3 20. Bd2 Nd7 21. Bh3 Ne2
+22. Bc1 Nf6 23. Bh6 d4 24. Qg6 Nd7 25. Nf3 Nb6 26. Bxf5 b4 27. Bf8 Bb7 28. Ng1
+Nc8 29. Qh7 Ke8 30. Qd7+ Kxf8 0-1
+
+[Event "Rated Classical game"]
+[Site "https://lichess.org/fixture0015"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_15"]
+[Black "player_b_15"]
+[Result "1-0"]
+[WhiteElo "2500"]
+[BlackElo "2480"]
+[TimeControl "1800+20"]
+[Termination "Normal"]
+
+1. e3 Nc6 2. Be2 Na5 3. d3 d5 4. a4 Be6 5. Ra3 Bg4 6. e4 b5 7. Qd2 g6 8. Qc3
+Bf5 9. Be3 b4 10. Nf3 Qd6 11. Kd2 Qd8 12. Qb3 Bxe4 13. Bf1 a6 14. Kd1 h5 15.
+Qc4 c5 16. Rb3 f6 17. Bc1 Rc8 18. Rc3 e6 19. Bd2 Qe7 20. Ke1 Nb3 21. a5 Ra8 22.
+Na3 Kf7 23. g4 Nc1 24. Bf4 Ke8 25. Nd4 bxc3 26. Be5 Qa7 27. Qxc5 Kd8 28. Qxa7
+Nxd3+ 29. Ke2 Ne7 30. Bf4 Rxa7 1-0
+
+[Event "Rated Classical game"]
+[Site "https://lichess.org/fixture0016"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_16"]
+[Black "player_b_16"]
+[Result "1/2-1/2"]
+[WhiteElo "2500"]
+[BlackElo "2480"]
+[TimeControl "1800+20"]
+[Termination "Normal"]
+
+1. Nf3 a6 2. Rg1 c6 3. c3 e5 4. Qa4 Qe7 5. b3 Qd6 6. Na3 Nh6 7. Nc2 Qd5 8. e4
+Qd6 9. Qxa6 Qg6 10. Qxc6 Na6 11. Bb5 Ng8 12. Na3 Qxg2 13. Qb6 Qg4 14. Ke2 Rb8
+15. Qxb7 Bxb7 16. Bd3 Bxa3 17. Rxg4 Bc5 18. Rg1 Bc6 19. Rf1 Kf8 20. Nd4 Ne7 21.
+Nb5 h5 22. Rg1 Bd4 23. Nd6 Rb4 24. Nxf7 Rb6 25. Nd6 Ng6 26. h4 Rh7 27. Kf1 Ke7
+28. Nf7 Kf6 29. Bb5 Bd5 30. Nd6 Nb4 1/2-1/2
+
+[Event "Rated Classical game"]
+[Site "https://lichess.org/fixture0017"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_17"]
+[Black "player_b_17"]
+[Result "0-1"]
+[WhiteElo "2500"]
+[BlackElo "2480"]
+[TimeControl "1800+20"]
+[Termination "Normal"]
+
+1. Nh3 h6 2. c3 b6 3. Ng1 Na6 4. Nf3 h5 5. d4 Bb7 6. Ng5 g6 7. Nh7 c6 8. h4 g5
+9. f4 gxh4 10. Qa4 Nc5 11. Qa3 Qc7 12. Rh2 Ba6 13. Rxh4 Rxh7 14. d5 Qd8 15. Rh2
+Ne4 16. Qa4 Qc7 17. Qxe4 Rh8 18. c4 Bc8 19. d6 c5 20. Qd5 e6 21. Be3 f5 22. Qd1
+Qd8 23. Kf2 e5 24. a3 Bb7 25. b4 Rh7 26. Kg1 Rh6 27. Qc1 Qe7 28. g3 Bc8 29. a4
+Qh7 30. Bf2 Ne7 0-1
+
+[Event "Rated Blitz tournament https://lichess.org/tournament/abc"]
+[Site "https://lichess.org/fixture0018"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_18"]
+[Black "player_b_18"]
+[Result "0-1"]
+[WhiteElo "2260"]
+[BlackElo "2340"]
+[TimeControl "180+2"]
+[Termination "Time forfeit"]
+
+1. g3 b5 2. d4 d5 3. e4 Nc6 4. Qh5 dxe4 5. Qh4 Qd7 6. b3 e6 7. Bxb5 a6 8. Na3
+f6 9. Bb2 Nce7 10. Qh3 g6 11. Bc4 Nd5 12. Bxd5 Ra7 13. g4 Qxd5 14. O-O-O Qd8
+15. Qh5 Qxd4 16. c4 Kd7 17. Qxg6 Kd8 18. Qf7 Qd2+ 19. Kb1 Bd7 0-1
+
+[Event "Rated Blitz tournament https://lichess.org/tournament/abc"]
+[Site "https://lichess.org/fixture0019"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_19"]
+[Black "player_b_19"]
+[Result "1-0"]
+[WhiteElo "2260"]
+[BlackElo "2340"]
+[TimeControl "180+2"]
+[Termination "Time forfeit"]
+
+1. c3 f5 2. Qc2 Kf7 3. g3 b6 4. Kd1 Ke8 5. a3 Nh6 6. Ra2 g6 7. h3 e5 8. b3 Kf7
+9. Qe4 Ke6 10. Qc6+ Bd6 11. Qb5 a5 12. e3 Qg5 13. Bg2 Ke7 14. c4 Kf6 15. Bc6
+Ke7 16. d4 Kf6 17. c5 Qf4 18. e4 Ra6 19. Bd5 Ra7 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0020"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_20"]
+[Black "player_b_20"]
+[Result "1-0"]
+[WhiteElo "2100"]
+[BlackElo "2400"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. Na3 Nh6 2. Nb5 c5 3. c3 g6 4. b4 c4 5. a3 b6 6. Bb2 Ng4 7. Nf3 Ba6 8. Qb1
+Nxh2 9. Ne5 d6 10. Qa2 Bb7 11. Nd4 Ng4 12. Qxc4 h6 13. f3 Bc8 14. Ndc6 a6 15.
+Bc1 d5 16. b5 Bb7 17. Nd4 Qc7 18. Nxf7 e5 19. Nb3 Qd7 20. Qd3 e4 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0021"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_21"]
+[Black "player_b_21"]
+[Result "1-0"]
+[WhiteElo "2100"]
+[BlackElo "2400"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. h3 e5 2. a4 Nh6 3. Nf3 Ng4 4. Ra2 Bd6 5. e3 Be7 6. hxg4 h6 7. Na3 g6 8. Rh4
+Bc5 9. Ra1 b5 10. Qe2 h5 11. Ra2 Qf6 12. Qc4 Bf8 13. Ra1 b4 14. d3 Bg7 15. Bd2
+d5 16. Qc5 Nc6 17. gxh5 Bb7 18. Rh2 e4 19. Rd1 Rxh5 20. c4 Rg5 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0022"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_22"]
+[Black "player_b_22"]
+[Result "1/2-1/2"]
+[WhiteElo "2100"]
+[BlackElo "2400"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. c4 g6 2. h3 d5 3. d4 b6 4. Nf3 a5 5. Ne5 Be6 6. Bf4 h5 7. Nc6 f6 8. g4 Nxc6
+9. Bg3 Nb8 10. f4 Bg7 11. a4 Na6 12. Kf2 Bf7 13. Kf3 c6 14. Rg1 Rc8 15. Kf2 e6
+16. Bg2 Bf8 17. Qd2 Rb8 18. e3 Bb4 19. g5 Bf8 20. b3 Be7 1/2-1/2
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0023"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_23"]
+[Black "player_b_23"]
+[Result "1/2-1/2"]
+[WhiteElo "2100"]
+[BlackElo "2400"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. Na3 f6 2. c3 Nh6 3. g3 c6 4. e3 a5 5. b4 Ra6 6. Bb5 Qc7 7. Bb2 Qd6 8. Bxa6
+Qxg3 9. Qb1 bxa6 10. Nf3 Kd8 11. Nb5 Qc7 12. Qc2 Qb6 13. Ba3 axb5 14. Nd4 d5
+15. Rd1 g5 16. h3 e5 17. Nb3 d4 18. Bb2 g4 19. f4 c5 20. Na1 Ke7 1/2-1/2
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0024"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_24"]
+[Black "player_b_24"]
+[Result "1/2-1/2"]
+[WhiteElo "2400"]
+[BlackElo "1900"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. h4 d6 2. b4 Qd7 3. g4 Na6 4. h5 Qb5 5. h6 Qh5 6. Nf3 f6 7. Rg1 Nc5 8. Rh1
+Nd7 9. Ng5 Qxh1 10. Ba3 Qg2 11. hxg7 Qg3 12. gxh8=R Nh6 13. Nc3 e6 14. fxg3 c6
+15. Nge4 Nc5 16. g5 Nf5 17. Bg2 h5 18. bxc5 h4 19. Nxd6+ Ke7 20. Rh5 Rb8
+1/2-1/2
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0025"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_25"]
+[Black "player_b_25"]
+[Result "0-1"]
+[WhiteElo "2400"]
+[BlackElo "1900"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. d3 f6 2. Kd2 g6 3. e3 e5 4. Ke1 Bd6 5. Kd2 Nc6 6. h4 Ba3 7. Rh2 Be7 8. b4
+Bd6 9. Na3 Bf8 10. Qf3 Nd4 11. Ke1 Nb3 12. Qd5 h5 13. cxb3 a6 14. Rh1 b5 15.
+Bb2 Bg7 16. Qe6+ Kf8 17. Qc6 Nh6 18. Qb6 Rg8 19. Nc4 bxc4 20. Rd1 Bb7 0-1
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0026"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_26"]
+[Black "player_b_26"]
+[Result "1-0"]
+[WhiteElo "2400"]
+[BlackElo "1900"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. h4 c5 2. Nf3 d5 3. a3 h6 4. c4 a5 5. Nc3 b5 6. Nxb5 Ba6 7. e3 Kd7 8. Rg1 e5
+9. Na7 Bc8 10. cxd5 Rxa7 11. Ke2 Be7 12. a4 f5 13. Qe1 Qb6 14. d6 f4 15. Ra2
+Ra6 16. Ng5 Nc6 17. exf4 Ra7 18. Ne6 Ke8 19. g3 Nf6 20. Ke3 Ra6 1-0
+
+[Event "Rated Bullet game"]
+[Site "https://lichess.org/fixture0027"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_27"]
+[Black "player_b_27"]
+[Result "0-1"]
+[WhiteElo "2600"]
+[BlackElo "2650"]
+[TimeControl "60+0"]
+[Termination "Normal"]
+
+1. Nf3 Nf6 2. Nc3 g5 3. g4 Nc6 4. d4 Na5 5. e3 Nd5 6. h4 Nc4 7. b3 Rg8 8. Qd3
+Ncb6 9. Qa6 Nxe3 10. Bxe3 Rh8 11. a3 Nd5 12. Qa4 gxh4 13. Bd2 Nb6 14. Bh6 Nd5
+15. Nd1 Bg7 16. Ra2 Bxd4 17. b4 Bf6 18. Bc1 h6 19. Bxh6 Ba1 20. Bf4 Nb6 0-1
+
+[Event "Rated Bullet game"]
+[Site "https://lichess.org/fixture0028"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_28"]
+[Black "player_b_28"]
+[Result "0-1"]
+[WhiteElo "2600"]
+[BlackElo "2650"]
+[TimeControl "60+0"]
+[Termination "Normal"]
+
+1. g4 e6 2. h4 c5 3. d4 Nf6 4. a4 h6 5. Na3 e5 6. c4 Rg8 7. b3 exd4 8. e3 b6 9.
+f4 Qe7 10. Rh2 d3 11. Qe2 Qxe3 12. Nh3 Rh8 13. Nf2 Nh5 14. Nh3 Qe6 15. Rf2 f6
+16. g5 Qe3 17. Bd2 Nxf4 18. Bc3 Rg8 19. Rc1 Bb7 20. Nb5 Ng2+ 0-1
+
+[Event "Rated Bullet game"]
+[Site "https://lichess.org/fixture0029"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_29"]
+[Black "player_b_29"]
+[Result "1-0"]
+[WhiteElo "2600"]
+[BlackElo "2650"]
+[TimeControl "60+0"]
+[Termination "Normal"]
+
+1. b3 d5 2. c4 Nh6 3. d3 a6 4. b4 d4 5. g4 Qd5 6. Bb2 Qa5 7. c5 f5 8. a3 Be6 9.
+e4 b6 10. Nf3 Nxg4 11. Qc1 Ne5 12. Qg5 Bc8 13. Ra2 Qa4 14. Qg2 Qb3 15. Nh4 h5
+16. Bc3 Bb7 17. c6 Nf7 18. Qh3 Qa4 19. Re2 Qc2 20. Qf3 Qb2 1-0
+
+[Event "Rated Bullet game"]
+[Site "https://lichess.org/fixture0030"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_30"]
+[Black "player_b_30"]
+[Result "1-0"]
+[WhiteElo "2600"]
+[BlackElo "2650"]
+[TimeControl "60+0"]
+[Termination "Normal"]
+
+1. b3 h5 2. f4 Nh6 3. Nh3 Ng4 4. Ng1 Na6 5. Bb2 g5 6. Bc3 c5 7. b4 Bg7 8. Bb2
+b6 9. Nc3 c4 10. Nb5 Nf2 11. Kxf2 Rg8 12. Rc1 Bb7 13. Bxg7 Rc8 14. Bf6 Rh8 15.
+Bd4 e6 16. Bxb6 Bd5 17. Kg3 d6 18. Bf2 Kf8 19. Bb6 Kg8 20. Nh3 Qc7 1-0
+
+[Event "Rated UltraBullet game"]
+[Site "https://lichess.org/fixture0031"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_31"]
+[Black "player_b_31"]
+[Result "1-0"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "15+0"]
+[Termination "Normal"]
+
+1. Nh3 d6 2. a3 e6 3. Ng5 f6 4. h4 Nh6 5. d4 Nf7 6. h5 Be7 7. Ne4 c6 8. Ned2
+Qa5 9. f3 Kd8 10. Rh3 Qa4 11. Kf2 Qxd4+ 12. e3 Qd5 13. f4 Rf8 14. Qg4 Ke8 15.
+Qf5 c5 16. e4 Qe5 17. Rd3 Nh8 18. a4 Qd4+ 19. Re3 Bd7 20. c3 Kd8 1-0
+
+[Event "Rated UltraBullet game"]
+[Site "https://lichess.org/fixture0032"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_32"]
+[Black "player_b_32"]
+[Result "1/2-1/2"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "15+0"]
+[Termination "Normal"]
+
+1. h3 c6 2. Nf3 f6 3. Rg1 h5 4. c4 b6 5. d4 c5 6. b3 a6 7. Nh2 f5 8. Nd2 Nc6 9.
+g4 d6 10. Ne4 Ra7 11. Bd2 Qd7 12. Rh1 f4 13. Nxc5 Rc7 14. g5 d5 15. Qc1 Bb7 16.
+Nxa6 Na7 17. Qa3 Qb5 18. Qb2 Bxa6 19. cxd5 Rb7 20. Bc1 Rd7 1/2-1/2
+
+[Event "Rated Correspondence game"]
+[Site "https://lichess.org/fixture0033"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_33"]
+[Black "player_b_33"]
+[Result "1-0"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "-"]
+[Termination "Normal"]
+
+1. h4 b5 2. Rh3 e6 3. f4 Ne7 4. c3 Nbc6 5. e3 Ng6 6. e4 Rb8 7. Bc4 Nce5 8. g3
+Qf6 9. Qg4 h6 10. b4 Nxc4 11. Ba3 Rg8 12. Ke2 c6 13. Ke1 Nge5 14. Kf2 Bd6 15.
+f5 c5 16. Bc1 Nxg4+ 17. Ke2 Qxf5 18. d4 Bc7 19. bxc5 h5 20. Na3 Ba6 1-0
+
+[Event "Rated Correspondence game"]
+[Site "https://lichess.org/fixture0034"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_34"]
+[Black "player_b_34"]
+[Result "0-1"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "-"]
+[Termination "Normal"]
+
+1. c3 b5 2. a4 c6 3. Na3 Ba6 4. f3 f6 5. g4 bxa4 6. Nc4 Bb7 7. Ne3 Bc8 8. Bg2
+Nh6 9. h4 Qc7 10. Nc2 a5 11. Ra3 c5 12. g5 Qf4 13. e3 Ba6 14. Ra2 f5 15. d3 Kf7
+16. gxh6 Kg6 17. b4 Kxh6 18. exf4 g5 19. Rb2 Kh5 20. Qe2 Bb7 0-1
+
+[Event "Casual Blitz game"]
+[Site "https://lichess.org/fixture0035"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_35"]
+[Black "player_b_35"]
+[Result "0-1"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. g4 c5 2. Bg2 f6 3. a3 h5 4. b3 c4 5. Kf1 e6 6. f3 h4 7. bxc4 Rh7 8. g5 Bd6
+9. g6 Bf4 10. h3 a5 11. Bb2 f5 12. e4 Rh8 13. exf5 Be3 14. Ne2 a4 15. Bd4 b5
+16. Ng1 Bxd4 17. c3 bxc4 18. Qe1 Ba6 19. f6 Bxc3 20. Ne2 Rh5 0-1
+
+[Event "Casual Blitz game"]
+[Site "https://lichess.org/fixture0036"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_36"]
+[Black "player_b_36"]
+[Result "1-0"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. Nf3 e6 2. Na3 b5 3. h3 Ba6 4. h4 Be7 5. b3 c6 6. d4 c5 7. Ng1 Bb7 8. c4 bxc4
+9. Bg5 Qa5+ 10. b4 Nf6 11. Nc2 Bc8 12. g3 Qd8 13. Ne3 O-O 14. Bg2 Qb6 15. Bf3
+Ne8 16. a4 d6 17. Be4 Qxb4+ 18. Qd2 Nc6 19. Ng2 Bb7 20. dxc5 Rc8 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0037"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_37"]
+[Black "player_b_37"]
+[Result "1-0"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "300+0"]
+[Termination "Abandoned"]
+
+1. e3 g6 2. Ne2 b6 3. h3 a5 4. g3 Nc6 5. c3 h5 6. f4 Bg7 7. g4 Be5 8. a4 Ra7 9.
+Bg2 Rh7 10. Bxc6 Ba6 11. Ba8 Bc4 12. Rh2 Bf6 13. gxh5 gxh5 14. d4 Bg5 15. Bd5
+Ra8 16. b4 Bxe2 17. Bc4 h4 18. Bd3 Rg7 19. b5 e5 20. Bh7 Ra6 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0038"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_38"]
+[Black "player_b_38"]
+[Result "0-1"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "300+0"]
+[Termination "Abandoned"]
+
+1. e3 b6 2. c3 g5 3. g3 Nh6 4. Bg2 g4 5. Qxg4 f6 6. Nh3 Ng8 7. Qd1 h6 8. c4 b5
+9. Nc3 c5 10. Nb1 e5 11. Rg1 e4 12. Ng5 Rh7 13. Nh3 Nc6 14. Nc3 d5 15. f4 Bg4
+16. Kf1 b4 17. d3 Nd4 18. Qf3 Ne7 19. Qe2 Rh8 20. Nf2 Qc8 0-1
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0039"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_39"]
+[Black "player_b_39"]
+[Result "1-0"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. g4 g6 2. d3 Nc6 3. Bg5 Ne5 4. Bf6 exf6 5. h4 d6 6. f4 Nxg4 1-0
+
+[Event "Rated Blitz game"]
+[Site "https://lichess.org/fixture0040"]
+[Date "2026.01.15"]
+[Round "?"]
+[White "player_w_40"]
+[Black "player_b_40"]
+[Result "1/2-1/2"]
+[WhiteElo "2400"]
+[BlackElo "2450"]
+[TimeControl "300+0"]
+[Termination "Normal"]
+
+1. g4 b5 2. Nc3 Nf6 3. b4 Nc6 4. g5 e6 5. a3 d5 6. h3 Na5 1/2-1/2
