@@ -17,7 +17,6 @@ from chessdl.data.pgn import (
     parse_game,
     parse_header_line,
 )
-from tests.conftest import EXPECTED_ACCEPTED_GAMES
 
 
 def headers(**overrides: str) -> dict[str, str]:
@@ -158,14 +157,14 @@ def test_accepts_a_time_forfeit(cfg):
 # --- streaming over the fixture --------------------------------------------
 
 
-def test_iterating_the_fixture_yields_only_accepted_games(sample_pgn: Path, cfg):
+def test_iterating_the_fixture_yields_only_accepted_games(sample_pgn: Path, cfg, expected_counts):
     stats = ScanStats()
     with sample_pgn.open(encoding="utf-8") as handle:
         games = list(iter_raw_games(handle, cfg.filter, stats=stats))
 
     assert stats.games_seen == 41
-    assert stats.games_accepted == EXPECTED_ACCEPTED_GAMES
-    assert len(games) == EXPECTED_ACCEPTED_GAMES
+    assert stats.games_accepted == expected_counts.accepted_games
+    assert len(games) == expected_counts.accepted_games
     assert 0 < stats.acceptance_rate < 1
 
 
@@ -204,11 +203,11 @@ def test_short_games_are_caught_by_the_ply_filter(sample_pgn: Path, cfg):
     assert len(too_short) == 2
 
 
-def test_a_stricter_filter_accepts_fewer_games(sample_pgn: Path, cfg):
+def test_a_stricter_filter_accepts_fewer_games(sample_pgn: Path, cfg, expected_counts):
     strict = replace(cfg.filter, min_elo=2450)
     with sample_pgn.open(encoding="utf-8") as handle:
         strict_count = sum(1 for _ in iter_raw_games(handle, strict))
-    assert strict_count < EXPECTED_ACCEPTED_GAMES
+    assert strict_count < expected_counts.accepted_games
 
 
 def test_parse_game_returns_none_when_no_move_is_readable(cfg):
@@ -234,11 +233,11 @@ def test_corrupt_movetext_is_truncated_rather_than_rejected(cfg):
     assert count_plies(game) < cfg.filter.min_plies  # so the pipeline drops it
 
 
-def test_filtering_is_streaming_not_buffering(sample_pgn: Path, cfg):
+def test_filtering_is_streaming_not_buffering(sample_pgn: Path, cfg, expected_counts):
     """The scanner must consume a plain iterator of lines, not a seekable file.
 
     The real source is a zstd decompression stream that cannot be rewound, so
     this guards the property the whole ingestion design depends on.
     """
     lines = iter(sample_pgn.read_text(encoding="utf-8").splitlines(keepends=True))
-    assert len(list(iter_raw_games(lines, cfg.filter))) == EXPECTED_ACCEPTED_GAMES
+    assert len(list(iter_raw_games(lines, cfg.filter))) == expected_counts.accepted_games

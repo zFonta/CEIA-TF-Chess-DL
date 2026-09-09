@@ -19,7 +19,6 @@ from chessdl.data.pgn import iter_raw_games
 from chessdl.data.state import PipelineState, SeenKeys, seen_keys_path
 from chessdl.data.validate import describe_table, validate_table
 from chessdl.normalize import value_to_cp
-from tests.conftest import EXPECTED_ACCEPTED_GAMES, EXPECTED_SAMPLEABLE_GAMES
 
 
 def fixture_sources(sample_pgn: Path) -> list[tuple[str, str]]:
@@ -88,12 +87,12 @@ def test_seen_keys_path_sits_next_to_the_state():
 # --- extraction ------------------------------------------------------------
 
 
-def test_extract_writes_only_the_accepted_games(sample_pgn: Path, cfg, tmp_path):
+def test_extract_writes_only_the_accepted_games(sample_pgn: Path, cfg, tmp_path, expected_counts):
     out = tmp_path / "extract.pgn.zst"
     stats = lichess.extract_games(sample_pgn, cfg.filter, out_path=out, progress=False)
 
     assert stats.games_seen == 41
-    assert stats.games_accepted == stats.games_written == EXPECTED_ACCEPTED_GAMES
+    assert stats.games_accepted == stats.games_written == expected_counts.accepted_games
     assert out.exists()
     assert out.stat().st_size < sample_pgn.stat().st_size
 
@@ -109,9 +108,9 @@ def test_the_extract_can_be_read_back(sample_pgn: Path, cfg, tmp_path):
     assert reread == original
 
 
-def test_survey_counts_without_writing(sample_pgn: Path, cfg, tmp_path):
+def test_survey_counts_without_writing(sample_pgn: Path, cfg, tmp_path, expected_counts):
     stats = lichess.extract_games(sample_pgn, cfg.filter, out_path=None, progress=False)
-    assert stats.games_accepted == EXPECTED_ACCEPTED_GAMES
+    assert stats.games_accepted == expected_counts.accepted_games
     assert stats.games_written == 0
     assert list(tmp_path.iterdir()) == []
 
@@ -133,15 +132,15 @@ def test_max_games_bounds_the_extract(sample_pgn: Path, cfg, tmp_path):
 # --- sampling and deduplication --------------------------------------------
 
 
-def test_positions_from_games_samples_every_usable_game(sample_pgn: Path, cfg, tmp_path):
+def test_positions_from_games_samples_every_usable_game(sample_pgn: Path, cfg, tmp_path, expected_counts):
     with sample_pgn.open(encoding="utf-8") as handle:
         games = list(iter_raw_games(handle, cfg.filter))
 
     seen = SeenKeys(tmp_path / "seen.npy")
     pending, duplicates, dropped = pipeline.positions_from_games(games, cfg, seen)
 
-    assert dropped == EXPECTED_ACCEPTED_GAMES - EXPECTED_SAMPLEABLE_GAMES
-    assert len(pending) == EXPECTED_SAMPLEABLE_GAMES * cfg.sampling.positions_per_game
+    assert dropped == expected_counts.too_short_games
+    assert len(pending) == expected_counts.sampleable_games * cfg.sampling.positions_per_game
     assert duplicates >= 0
 
 
@@ -275,10 +274,10 @@ def test_the_built_dataset_passes_every_integrity_check(built):
     assert report.passed, report.summary()
 
 
-def test_the_built_dataset_has_the_expected_size(built):
+def test_the_built_dataset_has_the_expected_size(built, expected_counts):
     summary, cfg = built
     table = schema.read_dataset(schema.shard_paths(cfg.output.local_dir))
-    assert table.num_rows == EXPECTED_SAMPLEABLE_GAMES * cfg.sampling.positions_per_game
+    assert table.num_rows == expected_counts.sampleable_games * cfg.sampling.positions_per_game
 
 
 def test_provenance_is_recorded_on_every_row(built):
@@ -301,17 +300,17 @@ def test_labels_can_be_read_back_as_centipawns(built):
         assert recovered == pytest.approx(cp, abs=1.0)
 
 
-def test_descriptive_statistics_are_available(built):
+def test_descriptive_statistics_are_available(built, expected_counts):
     summary, cfg = built
     table = schema.read_dataset(schema.shard_paths(cfg.output.local_dir))
     stats = describe_table(table)
 
     assert stats["n_positions"] == table.num_rows
-    assert stats["n_games"] == EXPECTED_SAMPLEABLE_GAMES
+    assert stats["n_games"] == expected_counts.sampleable_games
     assert stats["white_to_move_share"] == pytest.approx(0.5)
 
 
-def test_the_build_resumes_instead_of_redoing_work(sample_pgn: Path, local_cfg):
+def test_the_build_resumes_instead_of_redoing_work(sample_pgn: Path, local_cfg, expected_counts):
     """A disconnect must cost at most one shard, and must not duplicate rows."""
     sources = fixture_sources(sample_pgn)
     version = engine_version(local_cfg.labeling)
@@ -328,7 +327,7 @@ def test_the_build_resumes_instead_of_redoing_work(sample_pgn: Path, local_cfg):
     assert first.shards[0].path not in [shard.path for shard in second.shards]
 
     table = schema.read_dataset(schema.shard_paths(local_cfg.output.local_dir))
-    assert table.num_rows == EXPECTED_SAMPLEABLE_GAMES * local_cfg.sampling.positions_per_game
+    assert table.num_rows == expected_counts.sampleable_games * local_cfg.sampling.positions_per_game
     assert validate_table(table, local_cfg).passed
 
 

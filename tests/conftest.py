@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import shutil
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -12,10 +12,33 @@ from chessdl.config import DatasetConfig, load_config
 
 FIXTURE_PGN = Path(__file__).parent / "fixtures" / "sample_games.pgn"
 
-#: Games in the fixture whose headers should pass the filter. Twenty of them are
-#: also long enough to sample; two are deliberately too short.
-EXPECTED_ACCEPTED_GAMES = 22
-EXPECTED_SAMPLEABLE_GAMES = 20
+
+@dataclass(frozen=True)
+class FixtureExpectations:
+    """What the PGN fixture should yield at each stage of the pipeline."""
+
+    #: Games whose headers pass the filter.
+    accepted_games: int = 22
+    #: Of those, the ones also long enough to sample; two are deliberately short.
+    sampleable_games: int = 20
+
+    @property
+    def too_short_games(self) -> int:
+        return self.accepted_games - self.sampleable_games
+
+
+@pytest.fixture
+def expected_counts() -> FixtureExpectations:
+    """Expected counts for the PGN fixture, injected rather than imported.
+
+    These used to be module-level constants that other test modules imported with
+    ``from tests.conftest import ...``. That only works when the repository root
+    is on ``sys.path`` *and* nothing else on it claims the name ``tests`` -- and
+    a environment with a large pre-installed set of packages (Colab, for one)
+    can easily ship its own top-level ``tests`` package that shadows this one.
+    A fixture is resolved by pytest itself, so it depends on neither.
+    """
+    return FixtureExpectations()
 
 
 def find_stockfish() -> str | None:
