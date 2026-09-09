@@ -64,6 +64,38 @@ def sample_pgn() -> Path:
 
 
 @pytest.fixture
+def shard_with_keys():
+    """Write a shard containing exactly the given deduplication keys.
+
+    A fixture rather than an importable helper: importing between test modules
+    needs the repository root on ``sys.path`` and nothing else on it claiming
+    the name ``tests``, which is not something to rely on.
+    """
+    import chess
+
+    from chessdl.data import schema
+    from chessdl.normalize import cp_to_value
+
+    def build(path, keys):
+        filas = [
+            {
+                "game_id": f"g{clave}", "ply": 10, "fen": chess.STARTING_FEN,
+                "pos_key": clave, "turn_white": True,
+                "cp_white": 0, "cp_stm": 0,
+                "value_white": cp_to_value(0), "value_stm": cp_to_value(0),
+                "is_mate": False, "mate_in": 0,
+                "white_elo": 2400, "black_elo": 2350,
+                "result": "1-0", "time_control": "Blitz",
+                "sf_depth": 12, "sf_version": "Stockfish 17.1", "src_dump": "2025-06",
+            }
+            for clave in keys
+        ]
+        return schema.write_shard(filas, path)
+
+    return build
+
+
+@pytest.fixture
 def cfg() -> DatasetConfig:
     """The repository's own config, so the tests check the shipped defaults."""
     return load_config()

@@ -86,24 +86,46 @@ class NormalizationConfig:
 
 @dataclass(frozen=True)
 class OutputConfig:
-    """Shard layout, resume state and Hugging Face destination."""
+    """Where the pipeline writes, and where its durable copies live.
+
+    Everything durable lives on the Hugging Face Hub; the local directories are
+    only a working cache. That is what lets a run pick up on a fresh machine --
+    a recycled Colab runtime, or a different computer -- with nothing to mount
+    and nothing to copy by hand.
+
+    Two repositories, with different roles:
+
+    * ``hf_dataset`` holds the labelled Parquet shards. It is the deliverable,
+      the one the report cites and the one a reader would load.
+    * ``hf_work_dataset`` holds the pipeline's working data: the filtered PGN
+      extract and the resume state. Keeping it separate means the dataset repo
+      stays readable as a dataset, with nothing but the data in it.
+    """
 
     games_per_shard: int = 5000
-    local_dir: str = "/content/ceia-chess/shards"
-    # The filtered extracts and the resume state are expensive to regenerate
-    # (the extract costs a full pass over a multi-gigabyte dump), so on Colab
-    # they belong on Drive rather than the recycled local disk.
-    extract_dir: str = "/content/drive/MyDrive/ceia-chess/extracts"
-    state_path: str = "/content/drive/MyDrive/ceia-chess/state.json"
+
+    # --- local working cache (safe to lose; rebuilt from the Hub)
+    local_dir: str = "data/shards"
+    extract_dir: str = "data/extracts"
+    state_path: str = "data/state.json"
+
+    # --- durable storage
     push_to_hub: bool = True
     hf_dataset: str = "ceia-chess-eval"
+    hf_work_dataset: str = "ceia-chess-work"
     hf_namespace: str = field(
         default_factory=lambda: os.environ.get("HF_NAMESPACE", DEFAULT_HF_NAMESPACE)
     )
 
     @property
     def hf_repo_id(self) -> str:
+        """Repository holding the labelled dataset."""
         return f"{self.hf_namespace}/{self.hf_dataset}"
+
+    @property
+    def hf_work_repo_id(self) -> str:
+        """Repository holding the extract and the resume state."""
+        return f"{self.hf_namespace}/{self.hf_work_dataset}"
 
 
 @dataclass(frozen=True)

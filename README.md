@@ -106,8 +106,26 @@ lo que define una versión del dataset es el YAML.
 ### Credenciales
 
 El token de Hugging Face se lee de la variable de entorno `HF_TOKEN` o del panel
-de *Secrets* de Colab. El namespace sale de `HF_NAMESPACE` (por defecto `zFonta`).
-**Nunca se guardan credenciales en el repositorio.**
+de *Secrets* de Colab, y necesita permiso de **escritura**. El namespace sale de
+`HF_NAMESPACE` (por defecto `zFonta`). **Nunca se guardan credenciales en el
+repositorio.**
+
+## Dónde vive cada cosa
+
+Todo lo durable está en Hugging Face; el disco local es solo un cache
+descartable. **No se usa Google Drive**: no hay unidad que montar, y una corrida
+se puede continuar desde cualquier máquina.
+
+| Qué | Dónde |
+|---|---|
+| Shards etiquetados | `zFonta/ceia-chess-eval` — el entregable |
+| Extracto PGN filtrado | `zFonta/ceia-chess-work` |
+| Estado de reanudación | `zFonta/ceia-chess-work` |
+| Cache de trabajo | local, descartable |
+
+La deduplicación no se almacena: se reconstruye leyendo la columna `pos_key` de
+los shards publicados, así que el dataset es su propio registro de lo que
+contiene.
 
 ## Cargar el dataset
 
@@ -153,7 +171,7 @@ src/chessdl/
 ├── encoding.py        # posición → tensor (18,8,8), espejado según el turno
 ├── normalize.py       # cp ↔ [-1,1], directa e inversa
 ├── viz.py             # estilo de figuras para el análisis y la memoria
-├── colab.py           # entorno Colab: secretos, Drive, chequeo de runtime
+├── colab.py           # entorno Colab: secretos y chequeo de runtime
 ├── hf.py              # subida/bajada de shards a Hugging Face
 ├── data/
 │   ├── lichess.py     # streaming de los dumps, extracción filtrada
@@ -173,7 +191,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 176 tests, ~15 segundos
+pytest -q                          # los 186 tests, ~20 segundos
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos
@@ -182,7 +200,7 @@ pytest --collect-only -q           # listarlos sin ejecutarlos
 **Desde Colab**, en una celda, con `!` adelante:
 
 ```
-!python -m pytest -q
+!{sys.executable} -m pytest -q
 ```
 
 La notebook `01_build_dataset.ipynb` ya trae esa celda en su sección 2: conviene

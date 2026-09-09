@@ -1,8 +1,10 @@
-"""Hugging Face Hub storage for the dataset shards.
+"""Hugging Face Hub storage for everything the pipeline needs to keep.
 
-Shards are pushed to the Hub as soon as they are finished. That is what makes
-them durable: the Colab disk is temporary, so a shard that exists only under
-``/content`` is one disconnect away from being lost.
+The Hub is the only durable location: the Colab disk is temporary, so anything
+that exists only under ``/content`` is one disconnect away from being lost. Two
+repositories are used -- one for the labelled shards, which are the deliverable,
+and one for the pipeline's working data (the filtered extract and the resume
+state), which keeps the dataset repository free of anything but the data.
 
 The namespace comes from configuration (``HF_NAMESPACE``, defaulting to the
 project owner) and the token from the environment or Colab's secret store --
@@ -11,9 +13,15 @@ never from a file in the repository.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
-from huggingface_hub import HfApi, snapshot_download
+from huggingface_hub import HfApi, hf_hub_download, snapshot_download
+from huggingface_hub.errors import (
+    EntryNotFoundError,
+    HfHubHTTPError,
+    RepositoryNotFoundError,
+)
 
 from chessdl.colab import get_secret
 
@@ -95,3 +103,46 @@ def download_dataset(
         token=token or get_token(),
     )
     return Path(path)
+
+
+def file_exists(repo_id: str, path_in_repo: str, token: str | None = None) -> bool:
+    """Whether a file is present in the repository.
+
+    A missing repository counts as a missing file: on a first run neither exists
+    yet, and that is not an error.
+    """
+    api = HfApi(token=token or get_token())
+    try:
+        return api.file_exists(
+            repo_id=repo_id, filename=path_in_repo, repo_type="dataset"
+        )
+    except (RepositoryNotFoundError, HfHubHTTPError):
+        return False
+
+
+def download_file(
+    repo_id: str,
+    path_in_repo: str,
+    local_path: str | Path,
+    token: str | None = None,
+) -> Path | None:
+    """Fetch one file from the repository, or return None if it is not there.
+
+    The file is copied to ``local_path`` rather than left in the Hub cache, so
+    the rest of the pipeline works with plain paths and does not have to know
+    where the download came from.
+    """
+    target = Path(local_path)
+    try:
+        cached = hf_hub_download(
+            repo_id=repo_id,
+            filename=path_in_repo,
+            repo_type="dataset",
+            token=token or get_token(),
+        )
+    except (RepositoryNotFoundError, EntryNotFoundError, HfHubHTTPError):
+        return None
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(cached, target)
+    return target

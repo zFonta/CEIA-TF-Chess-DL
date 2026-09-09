@@ -23,7 +23,14 @@ from chessdl.config import DatasetConfig
 from chessdl.data import lichess, pgn, sampling, schema
 from chessdl.data.labeling import label_fens
 from chessdl.data.pgn import RawGame
-from chessdl.data.state import PipelineState, SeenKeys, seen_keys_path
+from chessdl.data.state import PipelineState, SeenKeys
+
+#: Shards live under this prefix, both on the Hub and in the local cache, so a
+#: downloaded dataset and a freshly built one have the same layout.
+SHARD_PREFIX = "data"
+
+#: Where the filtered extracts live inside the working repository.
+EXTRACT_PREFIX = "extracts"
 
 
 @dataclass
@@ -62,9 +69,23 @@ class BuildSummary:
         return "\n".join(lines)
 
 
+def extract_filename(cfg: DatasetConfig, dump: str) -> str:
+    return f"{cfg.source.dump_name(dump)}_filtered.pgn.zst"
+
+
 def extract_path_for(cfg: DatasetConfig, dump: str) -> Path:
-    """Where a dump's filtered extract is stored."""
-    return Path(cfg.output.extract_dir) / f"{cfg.source.dump_name(dump)}_filtered.pgn.zst"
+    """Where a dump's filtered extract is cached locally."""
+    return Path(cfg.output.extract_dir) / extract_filename(cfg, dump)
+
+
+def extract_path_in_repo(cfg: DatasetConfig, dump: str) -> str:
+    """Where the same extract lives in the working repository."""
+    return f"{EXTRACT_PREFIX}/{extract_filename(cfg, dump)}"
+
+
+def shard_path_for(cfg: DatasetConfig, dump: str, index: int) -> Path:
+    """Where a shard is written locally, mirroring the repository layout."""
+    return Path(cfg.output.local_dir) / SHARD_PREFIX / schema.shard_filename(dump, index)
 
 
 def resolve_sources(
@@ -107,13 +128,33 @@ def ensure_extract(
     state: PipelineState,
     max_games: int | None = None,
     progress: bool = True,
+    work_repo_id: str | None = None,
+    token: str | None = None,
 ) -> Path:
-    """Produce the filtered extract for a dump, or reuse the existing one."""
+    """Get the filtered extract for a dump, building it only as a last resort.
+
+    Three places are tried in order of cost: the local cache, the working
+    repository on the Hub, and finally a full pass over the dump. That last one
+    costs an hour of streaming and decompression, so it should happen once in
+    the life of the project and never again -- which is exactly what publishing
+    the extract buys.
+    """
     path = extract_path_for(cfg, dump)
     dump_state = state.for_dump(dump)
 
     if dump_state.extracted and path.exists():
         return path
+
+    if work_repo_id is not None:
+        from chessdl import hf
+
+        fetched = hf.download_file(
+            work_repo_id, extract_path_in_repo(cfg, dump), path, token=token
+        )
+        if fetched is not None:
+            dump_state.extracted = True
+            state.save(repo_id=work_repo_id, token=token)
+            return path
 
     stats = lichess.extract_games(
         source, cfg.filter, out_path=path, max_games=max_games, progress=progress
@@ -121,7 +162,20 @@ def ensure_extract(
     dump_state.extracted = True
     dump_state.games_seen = stats.games_seen
     dump_state.games_accepted = stats.games_accepted
-    state.save()
+
+    if work_repo_id is not None:
+        from chessdl import hf
+
+        hf.ensure_repo(work_repo_id, token=token)
+        hf.upload_file(
+            path,
+            work_repo_id,
+            extract_path_in_repo(cfg, dump),
+            token=token,
+            commit_message=f"Add filtered extract for {dump}",
+        )
+
+    state.save(repo_id=work_repo_id, token=token)
     return path
 
 
@@ -249,7 +303,7 @@ def build_shard(
     if not rows:
         return None
 
-    path = Path(cfg.output.local_dir) / schema.shard_filename(dump, index)
+    path = shard_path_for(cfg, dump, index)
     schema.write_shard(rows, path)
     return ShardResult(
         index=index,
@@ -261,13 +315,33 @@ def build_shard(
     )
 
 
-def push_shard(path: Path, cfg: DatasetConfig) -> None:
+def push_shard(path: Path, cfg: DatasetConfig, token: str | None = None) -> None:
     """Push a finished shard to the Hub, where it is actually durable."""
     from chessdl import hf  # imported lazily so offline runs need no token
 
-    token = hf.get_token(required=True)
-    hf.ensure_repo(cfg.output.hf_repo_id, token=token)
-    hf.upload_shard(path, cfg.output.hf_repo_id, token=token)
+    hf.upload_shard(path, cfg.output.hf_repo_id, token=token or hf.get_token(required=True))
+
+
+def sync_shards_from_hub(cfg: DatasetConfig, token: str | None = None) -> None:
+    """Bring the published shards into the local cache.
+
+    Needed before building anything, because the deduplication set is rebuilt
+    from them. The download is incremental, so only shards this machine has not
+    seen yet cross the network.
+    """
+    from chessdl import hf
+
+    try:
+        hf.download_dataset(cfg.output.hf_repo_id, cfg.output.local_dir, token=token)
+    except Exception:
+        # A first run has no repository yet, and a missing one is not a failure:
+        # there is simply nothing published to catch up with.
+        pass
+
+
+def load_seen_keys(cfg: DatasetConfig) -> SeenKeys:
+    """Rebuild the deduplication set from the shards in the local cache."""
+    return SeenKeys.from_shards(schema.shard_paths(cfg.output.local_dir))
 
 
 def run_build(
@@ -279,17 +353,40 @@ def run_build(
     progress: bool = True,
     sources: Sequence[tuple[str, str]] | None = None,
 ) -> BuildSummary:
-    """Run the full build for every configured dump, resuming where it stopped."""
-    state = PipelineState.load(cfg.output.state_path)
-    seen = SeenKeys(seen_keys_path(cfg.output.state_path))
+    """Run the full build for every configured dump, resuming where it stopped.
+
+    Nothing durable is read from local disk. The published shards and the state
+    file come from the Hub, so this works the same on a machine that has never
+    run the build before as on one continuing from an hour ago.
+    """
     should_push = cfg.output.push_to_hub if push is None else push
+
+    token = None
+    work_repo_id = None
+    if should_push:
+        from chessdl import hf
+
+        token = hf.get_token(required=True)
+        work_repo_id = cfg.output.hf_work_repo_id
+        hf.ensure_repo(cfg.output.hf_repo_id, token=token)
+        sync_shards_from_hub(cfg, token=token)
+
+    state = PipelineState.load(cfg.output.state_path, repo_id=work_repo_id, token=token)
+    seen = load_seen_keys(cfg)
 
     summary = BuildSummary()
     shards_built = 0
 
     for dump, source in resolve_sources(cfg, sources):
         extract = ensure_extract(
-            cfg, dump, source, state, max_games=max_games, progress=progress
+            cfg,
+            dump,
+            source,
+            state,
+            max_games=max_games,
+            progress=progress,
+            work_repo_id=work_repo_id,
+            token=token,
         )
         dump_state = state.for_dump(dump)
         skip = dump_state.games_to_skip(cfg.output.games_per_shard)
@@ -309,11 +406,13 @@ def run_build(
             if result is not None:
                 dump_state.positions_written += result.n_positions
                 summary.shards.append(result)
+                # The shard is pushed before the state advances: if the upload
+                # fails the state still points at this shard, so the resume
+                # rebuilds it rather than skipping past a gap in the dataset.
                 if should_push:
-                    push_shard(result.path, cfg)
+                    push_shard(result.path, cfg, token=token)
 
-            state.save()
-            seen.save()
+            state.save(repo_id=work_repo_id, token=token)
             shards_built += 1
 
     return summary

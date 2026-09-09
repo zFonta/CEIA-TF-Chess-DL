@@ -137,6 +137,33 @@ def test_reading_an_empty_directory_gives_an_empty_table(tmp_path):
     assert table.schema.equals(schema.SCHEMA)
 
 
+def test_shards_are_found_in_the_hub_layout(tmp_path):
+    """A dataset downloaded from the Hub keeps the repository layout.
+
+    Shards are uploaded under ``data/``, so a non-recursive search finds nothing
+    and the dataset silently reads as empty.
+    """
+    schema.write_shard(make_rows(5), tmp_path / "data" / "shard_00000.parquet")
+    assert len(schema.shard_paths(tmp_path)) == 1
+    assert schema.read_dataset(schema.shard_paths(tmp_path)).num_rows == 5
+
+
+def test_the_hub_client_cache_is_not_counted_twice(tmp_path):
+    """`snapshot_download` leaves bookkeeping under a hidden `.cache` directory."""
+    schema.write_shard(make_rows(5), tmp_path / "data" / "shard_00000.parquet")
+    schema.write_shard(
+        make_rows(5), tmp_path / ".cache" / "huggingface" / "download" / "shard_00000.parquet"
+    )
+    assert len(schema.shard_paths(tmp_path)) == 1
+
+
+def test_shards_are_still_found_in_a_flat_directory(tmp_path):
+    """The local build writes shards flat; that path must keep working."""
+    schema.write_shard(make_rows(5), tmp_path / "shard_00000.parquet")
+    schema.write_shard(make_rows(5)[:3], tmp_path / "shard_00001.parquet")
+    assert len(schema.shard_paths(tmp_path)) == 2
+
+
 def test_a_row_missing_a_column_is_rejected():
     """Arrow would fill the gap with nulls; the writer must not let it."""
     row = make_row()

@@ -16,7 +16,7 @@ import pytest
 from chessdl.data import lichess, pipeline, schema
 from chessdl.data.labeling import analyse_fen, engine_version, label_fens, open_engine
 from chessdl.data.pgn import iter_raw_games
-from chessdl.data.state import PipelineState, SeenKeys, seen_keys_path
+from chessdl.data.state import DumpState, PipelineState, SeenKeys
 from chessdl.data.validate import describe_table, validate_table
 from chessdl.normalize import value_to_cp
 
@@ -52,36 +52,39 @@ def test_games_to_skip_follows_the_shard_size(tmp_path):
     assert dump_state.games_to_skip(5000) == 20_000
 
 
-def test_seen_keys_persist_across_runs(tmp_path):
-    """Deduplication has to survive a Colab disconnect, not just a process."""
-    path = tmp_path / "seen.npy"
-    keys = SeenKeys(path)
+def test_seen_keys_track_what_was_added():
+    keys = SeenKeys()
     assert keys.add_new(11) is True
     assert keys.add_new(11) is False
-    keys.add_new(22)
-    keys.save()
-
-    reloaded = SeenKeys(path)
-    assert len(reloaded) == 2
-    assert 11 in reloaded
-    assert reloaded.add_new(11) is False
-    assert reloaded.add_new(33) is True
+    assert 11 in keys
+    assert len(keys) == 1
 
 
-def test_seen_keys_handle_large_values(tmp_path):
-    """Position keys are full 64-bit values and must not overflow on the way out."""
-    path = tmp_path / "seen.npy"
+def test_seen_keys_handle_the_full_64_bit_range():
+    """Position keys use the whole range and must not overflow anywhere."""
+    keys = SeenKeys()
     big = 2**64 - 1
-    keys = SeenKeys(path)
-    keys.add_new(big)
-    keys.save()
-    assert big in SeenKeys(path)
+    assert keys.add_new(big) is True
+    assert big in keys
 
 
-def test_seen_keys_path_sits_next_to_the_state():
-    path = seen_keys_path("/content/drive/MyDrive/ceia-chess/state.json")
-    assert path.name == "state_seen_keys.npy"
-    assert path.parent.name == "ceia-chess"
+def test_seen_keys_are_rebuilt_from_the_published_shards(tmp_path, shard_with_keys):
+    """The dataset is its own record of what it contains.
+
+    Deduplication used to depend on a separate file that had to be kept in step
+    with the shards; reading the shards removes that possibility of drift.
+    """
+    shard_with_keys(tmp_path / "data" / "a.parquet", [101, 102])
+    shard_with_keys(tmp_path / "data" / "b.parquet", [103])
+
+    keys = SeenKeys.from_shards(schema.shard_paths(tmp_path))
+    assert len(keys) == 3
+    assert keys.add_new(101) is False
+    assert keys.add_new(999) is True
+
+
+def test_seen_keys_from_no_shards_is_empty():
+    assert len(SeenKeys.from_shards([])) == 0
 
 
 # --- extraction ------------------------------------------------------------
@@ -136,7 +139,7 @@ def test_positions_from_games_samples_every_usable_game(sample_pgn: Path, cfg, t
     with sample_pgn.open(encoding="utf-8") as handle:
         games = list(iter_raw_games(handle, cfg.filter))
 
-    seen = SeenKeys(tmp_path / "seen.npy")
+    seen = SeenKeys()
     pending, duplicates, dropped = pipeline.positions_from_games(games, cfg, seen)
 
     assert dropped == expected_counts.too_short_games
@@ -149,7 +152,7 @@ def test_duplicate_positions_are_skipped(sample_pgn: Path, cfg, tmp_path):
     with sample_pgn.open(encoding="utf-8") as handle:
         games = list(iter_raw_games(handle, cfg.filter))
 
-    seen = SeenKeys(tmp_path / "seen.npy")
+    seen = SeenKeys()
     first, _, _ = pipeline.positions_from_games(games, cfg, seen)
     second, duplicates, _ = pipeline.positions_from_games(games, cfg, seen)
 
@@ -161,7 +164,7 @@ def test_sampled_positions_are_colour_balanced(sample_pgn: Path, cfg, tmp_path):
     with sample_pgn.open(encoding="utf-8") as handle:
         games = list(iter_raw_games(handle, cfg.filter))
 
-    pending, _, _ = pipeline.positions_from_games(games, cfg, SeenKeys(tmp_path / "s.npy"))
+    pending, _, _ = pipeline.positions_from_games(games, cfg, SeenKeys())
     white = sum(1 for row in pending if row["turn_white"])
     assert white == len(pending) - white
 
@@ -358,3 +361,75 @@ def test_the_extract_is_not_rebuilt_on_resume(sample_pgn: Path, local_cfg):
         local_cfg, sf_version=version, max_shards=1, progress=False, sources=sources
     )
     assert extract.stat().st_mtime_ns == stamp
+
+
+# --- almacenamiento en el Hub -----------------------------------------------
+
+
+def test_shards_are_written_under_the_repository_layout(built):
+    """El cache local espeja al Hub, asi un dataset bajado y uno recien
+    construido se leen igual."""
+    summary, cfg = built
+    for shard in summary.shards:
+        assert shard.path.parent.name == pipeline.SHARD_PREFIX
+    assert schema.shard_paths(cfg.output.local_dir)
+
+
+def test_the_extract_has_a_place_in_the_working_repository(cfg):
+    ruta = pipeline.extract_path_in_repo(cfg, "2025-06")
+    assert ruta.startswith(pipeline.EXTRACT_PREFIX + "/")
+    assert ruta.endswith(".pgn.zst")
+    assert "2025-06" in ruta
+
+
+def test_state_falls_back_to_the_hub_when_there_is_no_local_copy(tmp_path, monkeypatch):
+    """En una maquina nueva el estado no existe localmente y hay que traerlo."""
+    from chessdl import hf
+
+    remoto = tmp_path / "remoto.json"
+    PipelineState(path=remoto, dumps={"2025-06": DumpState(shards_done=7)}).save()
+
+    def falso_download(repo_id, path_in_repo, local_path, token=None):
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(local_path).write_text(remoto.read_text(), encoding="utf-8")
+        return Path(local_path)
+
+    monkeypatch.setattr(hf, "download_file", falso_download)
+
+    estado = PipelineState.load(tmp_path / "no_existe.json", repo_id="usuario/trabajo")
+    assert estado.for_dump("2025-06").shards_done == 7
+
+
+def test_state_starts_empty_when_the_hub_has_nothing_either(tmp_path, monkeypatch):
+    """Primera corrida del proyecto: ni local ni remoto, y eso no es un error."""
+    from chessdl import hf
+
+    monkeypatch.setattr(hf, "download_file", lambda *a, **k: None)
+    estado = PipelineState.load(tmp_path / "no_existe.json", repo_id="usuario/trabajo")
+    assert estado.dumps == {}
+    assert estado.total_positions == 0
+
+
+def test_state_is_pushed_when_a_repository_is_given(tmp_path, monkeypatch):
+    from chessdl import hf
+
+    subidas = []
+    monkeypatch.setattr(
+        hf, "upload_file",
+        lambda path, repo_id, path_in_repo, **k: subidas.append((repo_id, path_in_repo)))
+
+    estado = PipelineState(path=tmp_path / "state.json")
+    estado.for_dump("2025-06").shards_done = 2
+    estado.save(repo_id="usuario/trabajo")
+
+    assert subidas == [("usuario/trabajo", "state.json")]
+    assert (tmp_path / "state.json").exists()
+
+
+def test_state_is_not_pushed_without_a_repository(tmp_path, monkeypatch):
+    from chessdl import hf
+
+    monkeypatch.setattr(hf, "upload_file",
+                        lambda *a, **k: pytest.fail("no deberia subir nada"))
+    PipelineState(path=tmp_path / "state.json").save()
+    assert (tmp_path / "state.json").exists()

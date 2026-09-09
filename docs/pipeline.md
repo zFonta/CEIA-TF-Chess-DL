@@ -10,7 +10,7 @@ justificar en la memoria.
 flowchart TD
     A["Lichess: dump mensual<br/>~30 GB comprimido, zstd"] --> B{"Filtro de cabeceras<br/>ELO ≥ 2200 a ambos<br/>Blitz / Rapid / Classical<br/>partida no abandonada"}
     B -->|rechazada| B1["se descarta sin parsear<br/>el movetext"]
-    B -->|aceptada| C["Extracto PGN filtrado<br/>(zstd, en Drive)"]
+    B -->|aceptada| C["Extracto PGN filtrado<br/>(zstd, publicado en el Hub)"]
 
     C --> D["Parseo de la partida<br/>+ filtro de largo mínimo"]
     D --> E["Muestreo de 4 posiciones<br/>2 con blancas al turno<br/>2 con negras"]
@@ -23,8 +23,10 @@ flowchart TD
     I --> J["Hugging Face Datasets"]
     I --> K["Chequeos de integridad<br/>(requerimiento 3.2)"]
 
-    J -.-> L["Estado de reanudación<br/>(dump, shard, claves vistas)"]
+    J -.-> L["Estado en el Hub<br/>(dump, shards hechos)"]
+    J -.-> M["Claves vistas<br/>(leídas de los shards)"]
     L -.-> D
+    M -.-> F
 ```
 
 ## Las dos pasadas, y por qué
@@ -103,9 +105,11 @@ La clave de deduplicación es un digest de los **cuatro primeros campos del FEN*
 jugadas quedan afuera a propósito: la misma posición alcanzada con distinto reloj
 es la misma posición.
 
-El conjunto de claves vistas se persiste junto al estado de reanudación, así la
-deduplicación vale **entre shards y entre sesiones**, no solo dentro de un
-proceso.
+El conjunto de claves vistas **no se guarda en ningún archivo**: se reconstruye
+al inicio de cada corrida leyendo la columna `pos_key` de los shards ya
+publicados. Así la deduplicación vale entre shards y entre sesiones sin que haya
+un segundo artefacto que subir después de cada shard ni que pueda quedar
+desincronizado con el dataset.
 
 ## Reanudación
 
@@ -113,9 +117,15 @@ Se guarda progreso después de **cada shard**. El estado registra, por dump, si 
 está extraído y cuántos shards se completaron; al reanudar se saltean las
 partidas ya consumidas del extracto —barato, porque es un archivo local y chico—.
 
-En Colab, el estado y el extracto van a Drive: todo lo que está bajo `/content`
-se pierde al reciclarse el runtime. Los shards terminados viven en Hugging Face,
-que es la copia durable real (mitigación del Riesgo 6 del plan).
+Nada durable vive en disco local. El extracto y el estado se publican en el
+repositorio de trabajo del Hub, y los shards en el del dataset; `/content` es
+solo un cache que se puede perder sin consecuencias. Por eso la corrida se puede
+continuar en una máquina que nunca la ejecutó, sin montar ninguna unidad
+(mitigación del Riesgo 6 del plan).
+
+La deduplicación tampoco se guarda: se reconstruye leyendo la columna `pos_key`
+de los shards publicados. El dataset es su propio registro de lo que contiene,
+así que no hay un segundo archivo que pueda quedar desincronizado.
 
 ## Manejo de fallas
 

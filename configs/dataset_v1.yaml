@@ -51,14 +51,18 @@ normalization:
 
 output:
   games_per_shard: 5000
+
+  # Cache de trabajo. Es descartable: todo se puede reconstruir desde el Hub.
   local_dir: /content/ceia-chess/shards
-  # El extracto filtrado y el estado de reanudacion son caros de regenerar (el
-  # extracto cuesta una pasada completa sobre el dump), asi que en Colab van a
-  # Drive: todo lo que esta bajo /content se pierde al reciclarse el runtime.
-  extract_dir: /content/drive/MyDrive/ceia-chess/extracts
-  state_path: /content/drive/MyDrive/ceia-chess/state.json
+  extract_dir: /content/ceia-chess/extracts
+  state_path: /content/ceia-chess/state.json
+
+  # Almacenamiento durable. Dos repositorios con roles distintos:
+  #   hf_dataset      -> los shards etiquetados; es el entregable
+  #   hf_work_dataset -> el extracto filtrado y el estado de reanudacion
   push_to_hub: true
   hf_dataset: ceia-chess-eval
+  hf_work_dataset: ceia-chess-work
 
 validation:
   # Requerimiento 1.3: ninguna clase de turno puede superar este porcentaje.

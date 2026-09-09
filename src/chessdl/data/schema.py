@@ -110,8 +110,19 @@ def read_shard(path: str | Path) -> pa.Table:
 
 
 def shard_paths(directory: str | Path) -> list[Path]:
-    """Every shard in a directory, in stable order."""
-    return sorted(Path(directory).glob("*.parquet"))
+    """Every shard under a directory, in stable order.
+
+    The search is recursive because a dataset downloaded from the Hub keeps the
+    repository layout, so its shards land in a ``data/`` subdirectory rather than
+    at the top level. Hidden directories are skipped so the Hub client's own
+    ``.cache/huggingface`` bookkeeping cannot contribute duplicates.
+    """
+    root = Path(directory)
+    return sorted(
+        path
+        for path in root.rglob("*.parquet")
+        if not any(part.startswith(".") for part in path.relative_to(root).parts)
+    )
 
 
 def read_dataset(paths: Iterable[str | Path]) -> pa.Table:

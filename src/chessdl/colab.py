@@ -1,9 +1,12 @@
 """Helpers for running the pipeline on Google Colab.
 
 Colab is the project's execution environment, so the awkward parts of it --
-secrets, the recycled local disk, and the fact that a GPU runtime is the *wrong*
-choice for this stage -- are handled here instead of being copy-pasted into
-every notebook.
+secrets and the fact that a GPU runtime is the *wrong* choice for this stage --
+are handled here instead of being copy-pasted into every notebook.
+
+Nothing here mounts Google Drive: everything the build has to keep lives on the
+Hugging Face Hub, which needs no drive mounted and works the same from any
+machine.
 
 Nothing here is Colab-only: every function degrades to a sensible answer when
 the code runs somewhere else, so the same notebooks work locally.
@@ -44,22 +47,6 @@ def get_secret(name: str) -> str | None:
             # environment fallback below is the answer either way.
             pass
     return os.environ.get(name)
-
-
-def mount_drive(mount_point: str = "/content/drive") -> Path | None:
-    """Mount Google Drive, returning its path (or None when not on Colab).
-
-    The resume state belongs on Drive: anything under ``/content`` disappears
-    when the runtime is recycled, which on a multi-hour labelling run means
-    starting over.
-    """
-    if not in_colab():
-        return None
-    from google.colab import drive
-
-    if not Path(mount_point).joinpath("MyDrive").exists():
-        drive.mount(mount_point)
-    return Path(mount_point)
 
 
 def has_gpu() -> bool:
