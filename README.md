@@ -7,19 +7,40 @@ Trabajo Final — Carrera de Especialización en Inteligencia Artificial (FIUBA)
 
 ## Estado del proyecto
 
-Este repositorio implementa por ahora el **bloque 3 del WBS: pipeline de datos**.
-Genera un dataset reproducible de pares *(posición, evaluación)* etiquetados con
-Stockfish, a partir de partidas públicas de Lichess.
+Este repositorio implementa el **bloque 3 del WBS: pipeline de datos**. Genera un
+dataset reproducible de pares *(posición, evaluación)* etiquetados con Stockfish,
+a partir de partidas públicas de Lichess.
 
 | Bloque del WBS | Estado |
 |---|---|
-| 3. Pipeline de datos | Implementado |
+| 3. Pipeline de datos | **Completo — dataset generado y publicado** |
 | 4. Red neuronal | Pendiente |
 | 5. Motor de juego | Pendiente |
 | 6. Evaluación del sistema | Pendiente |
 
 Requerimientos del plan cubiertos: **1.1, 1.2, 1.3, 2.2, 2.3, 3.2, 5.1**, y la
 transformación inversa que necesita el 4.2.
+
+### El dataset generado
+
+Corrida completa en Colab Pro, publicada en
+[`zFonta/ceia-chess-eval`](https://huggingface.co/datasets/zFonta/ceia-chess-eval):
+
+| | |
+|---|---|
+| Posiciones | **2.552.804** en 157 shards |
+| Partidas | 772.797, del dump `2025-06` de Lichess |
+| Etiquetas | Stockfish 17.1 a profundidad 12 |
+| Balance de color | 49,68 % / 50,32 % |
+| Chequeos de integridad | 8 de 8 en verde, cero duplicados |
+
+El detalle completo —composición, distribuciones, validación manual del
+etiquetado y limitaciones conocidas— está en
+[`docs/dataset_card.md`](docs/dataset_card.md); lo que costó generarlo y qué
+esperar al volver a correrlo, en [`docs/pipeline.md`](docs/pipeline.md).
+
+Las tres notebooks del repositorio están versionadas **con la salida de esa
+corrida**, así que los números se pueden auditar sin volver a ejecutar nada.
 
 ## Qué hace el pipeline
 
@@ -191,7 +212,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 186 tests, ~20 segundos
+pytest -q                          # los 204 tests, ~30 segundos
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos
@@ -221,6 +242,10 @@ Lo que cubren, en orden de importancia:
   Stockfish real, incluida la reanudación tras una interrupción.
 - **`test_dataset_integrity.py`** — que cada chequeo del requerimiento 3.2 falle
   cuando se le inyecta el problema que dice detectar.
+- **`test_notebooks.py`** — que las celdas de entorno de las tres notebooks no se
+  desincronicen. Cubre las fallas que ya costaron una sesión de Colab: instalar
+  sin el extra `dev`, no poner `src/` en `sys.path`, tapar un `git pull` fallido
+  con `check=False`, o llamar a `!python` en vez de `!{sys.executable}`.
 - **`test_normalize.py`**, **`test_sampling.py`**, **`test_pgn_filter.py`**.
 
 ## Fuente de datos y licencia

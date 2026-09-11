@@ -24,8 +24,47 @@ BASE_URL="https://github.com/official-stockfish/Stockfish/releases/download"
 mkdir -p "${INSTALL_DIR}"
 TARGET="${INSTALL_DIR}/stockfish"
 
+# Search one position and report whether real search output came back.
+#
+# The binary has to *search*, not just start. Piping "quit" on its own is not a
+# test: Stockfish exits before evaluating anything, so a build that dies the
+# moment it searches still looks fine. stdin is also held open past the `go`,
+# because closing it counts as a quit and the engine would exit before
+# searching -- the very failure this is meant to catch.
+searches_ok() {
+    local binary="$1" position="$2" out
+    [ -x "${binary}" ] || return 1
+
+    out="$({ printf 'uci\nucinewgame\nisready\nposition %s\ngo depth 8\n' "${position}"
+             sleep 5; } | timeout 60 "${binary}" 2>/dev/null)" || return 1
+
+    case "${out}" in *"bestmove"*) ;; *) return 1 ;; esac
+    case "${out}" in *"info depth"*) ;; *) return 1 ;; esac
+    return 0
+}
+
+# Acceptance test: can this build search an ordinary position at all?
+#
+# Only this decides whether a binary is usable. The bar is deliberately low,
+# because the fallbacks swap in a *different* Stockfish, and the exact engine
+# is what makes the labels reproducible (requirement 2.3): rejecting a working
+# build would trade a known version for an unknown one.
 runs_ok() {
-    [ -x "$1" ] && echo "quit" | "$1" > /dev/null 2>&1
+    searches_ok "$1" "startpos"
+}
+
+# Warning-only probe: some environments crash on sparse endgames.
+#
+# Not a rejection, because the build labels ordinary positions correctly and
+# the pipeline retries then drops what fails. It is worth saying out loud,
+# though: silently dropped endgames would skew the dataset.
+warn_if_fragile() {
+    if ! searches_ok "$1" "fen 8/8/8/4k3/8/8/4Q3/4K3 w - - 0 1"; then
+        echo
+        echo "WARNING: this build searches normal positions but crashes on a bare"
+        echo "         king-and-queen endgame. Labelling will work, but positions"
+        echo "         with very little material may be dropped from the dataset."
+    fi
 }
 
 install_release() {
@@ -83,6 +122,7 @@ fi
 echo
 echo "Installed at: ${TARGET}"
 printf 'uci\nquit\n' | "${TARGET}" | grep '^id name' || true
+warn_if_fragile "${TARGET}"
 echo
 echo "Add it to PATH for this session with:"
 echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""

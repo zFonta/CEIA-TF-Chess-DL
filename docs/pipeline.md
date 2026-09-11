@@ -8,7 +8,7 @@ justificar en la memoria.
 
 ```mermaid
 flowchart TD
-    A["Lichess: dump mensual<br/>~30 GB comprimido, zstd"] --> B{"Filtro de cabeceras<br/>ELO ≥ 2200 a ambos<br/>Blitz / Rapid / Classical<br/>partida no abandonada"}
+    A["Lichess: dump mensual<br/>~91 M de partidas, zstd"] --> B{"Filtro de cabeceras<br/>ELO ≥ 2200 a ambos<br/>Blitz / Rapid / Classical<br/>partida no abandonada"}
     B -->|rechazada| B1["se descarta sin parsear<br/>el movetext"]
     B -->|aceptada| C["Extracto PGN filtrado<br/>(zstd, publicado en el Hub)"]
 
@@ -48,8 +48,8 @@ escribe shards, subiendo cada uno apenas se cierra.
 ## El filtro es de dos etapas, por costo
 
 Un dump mensual tiene del orden de 10⁸ partidas y solo una fracción chica pasa el
-filtro. Parsear el movetext de cada partida para después descartar casi todas
-dominaría el tiempo de ejecución.
+filtro —medido sobre `2025-06`: **1,82 %**—. Parsear el movetext de cada partida
+para después descartar 98 de cada 100 dominaría el tiempo de ejecución.
 
 Por eso el escáner decide **desde las cabeceras solas**, sin construir un tablero
 ni un objeto de partida, y las partidas rechazadas ni siquiera acumulan su
@@ -123,10 +123,6 @@ solo un cache que se puede perder sin consecuencias. Por eso la corrida se puede
 continuar en una máquina que nunca la ejecutó, sin montar ninguna unidad
 (mitigación del Riesgo 6 del plan).
 
-La deduplicación tampoco se guarda: se reconstruye leyendo la columna `pos_key`
-de los shards publicados. El dataset es su propio registro de lo que contiene,
-así que no hay un segundo archivo que pueda quedar desincronizado.
-
 ## Manejo de fallas
 
 - **Partida con movetext corrupto:** `python-chess` no falla, ignora los tokens
@@ -145,3 +141,45 @@ así que no hay un segundo archivo que pueda quedar desincronizado.
 Cada fila del dataset lleva su propia procedencia: `sf_version` (leída del
 handshake UCI del motor, no escrita a mano), `sf_depth`, `src_dump`, `game_id` y
 `ply`. El dataset se documenta a sí mismo, que es lo que pide el requerimiento 2.3.
+
+## Qué pasó al correrlo de verdad
+
+El pipeline se ejecutó completo en Colab Pro sobre el dump `2025-06`. Los números
+de esta sección son los que quedaron guardados en las notebooks; sirven para
+dimensionar una corrida futura sin tener que estimar.
+
+**Entorno.** Colab asignó **2 vCPU**, no más. El paralelismo sale de
+`os.cpu_count()`, así que el pipeline usó 2 workers. Es el factor que domina el
+tiempo total: el etiquetado es puro CPU y escala casi lineal con los workers.
+
+**Pasada 1 — extracción.** Recorrió **91.189.178 partidas** y aceptó
+**1.661.093** (tasa del **1,82 %**), en algo más de una hora. El extracto
+filtrado resultante pesa unos 825 MB comprimidos y se publicó en el repositorio
+de trabajo del Hub, así que esta pasada no hay que repetirla nunca más para este
+dump.
+
+El survey previo (notebook `00`) había estimado la tasa en 1,76 % sobre el primer
+millón de partidas. La diferencia con el 1,82 % real es chica, que es todo lo que
+se le pide: el survey existe para decidir cuántos meses hacen falta, y acertó en
+que **alcanzaba con uno solo**.
+
+**Pasada 2 — etiquetado.** A profundidad 12 con 2 workers el ritmo fue de
+**~12 posiciones por segundo**. Llegar a 2.552.804 posiciones tomó 157 shards.
+Se consumió el **47 % del extracto**: el mes sobra, y ampliar el dataset no
+requiere bajar otro dump, solo seguir corriendo la misma celda.
+
+**Rendimiento por shard.** El techo teórico es 4 posiciones × 5.000 partidas =
+20.000 por shard. El real arrancó en 18.224 (91 %) y bajó a 17.282 (86 %) para el
+quinto shard. La pérdida es casi toda deduplicación, y **crece con el tamaño del
+dataset** —1.560 duplicados en el primer shard, 2.558 en el quinto— porque cada
+posición nueva se compara contra un conjunto cada vez mayor. Las partidas
+descartadas por quedar cortas tras el parseo son un efecto menor: entre 40 y 60
+por shard, del orden del 0,3 %.
+
+Esto tiene una consecuencia práctica para planificar: el rendimiento por shard
+**decae** a medida que el dataset crece. Estimar el tiempo total multiplicando
+por el rendimiento del primer shard subestima.
+
+**Resultado.** 2.552.804 posiciones, 772.797 partidas distintas, 3,30 posiciones
+por partida efectivas (de las 4 muestreadas), los ocho chequeos de integridad en
+verde y cero duplicados.

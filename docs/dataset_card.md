@@ -4,9 +4,65 @@ Documentación del proceso de etiquetado, exigida por el **requerimiento 2.3**:
 versión de Stockfish, profundidad de búsqueda y transformaciones aplicadas a los
 datos.
 
-- **Repositorio:** `zFonta/ceia-chess-eval` (Hugging Face Datasets)
+- **Repositorio:** [`zFonta/ceia-chess-eval`](https://huggingface.co/datasets/zFonta/ceia-chess-eval) (Hugging Face Datasets)
 - **Versión de configuración:** `v1` — [`configs/dataset_v1.yaml`](../configs/dataset_v1.yaml)
 - **Licencia de los datos de origen:** CC0 (base pública de Lichess)
+
+## La versión publicada, en números
+
+Corrida completa ejecutada en Colab Pro (runtime de CPU, 2 vCPU asignadas) con
+las notebooks `00`, `01` y `02`. Todos los valores de esta sección salen de la
+salida guardada en esas notebooks, no de una estimación.
+
+| Medida | Valor |
+|---|---|
+| Posiciones | **2.552.804** |
+| Shards | 157 (`games_per_shard = 5000`) |
+| Partidas distintas representadas | 772.797 |
+| Posiciones por partida (efectivo) | 3,30 |
+| Dump de origen | `2025-06`, único |
+| Motor | **Stockfish 17.1**, profundidad 12 |
+| Velocidad de etiquetado | ~12,1 posiciones/segundo con 2 workers |
+
+**Composición por control de tiempo:**
+
+| Categoría | Posiciones | Proporción |
+|---|---|---|
+| Blitz | 2.332.732 | 91,38 % |
+| Rapid | 212.703 | 8,33 % |
+| Classical | 7.369 | 0,29 % |
+
+El dataset es, en los hechos, casi enteramente de Blitz. No es un desvío del
+filtro sino su consecuencia: Blitz es con diferencia la categoría más jugada en
+Lichess, y Classical es marginal incluso antes de aplicar el umbral de ELO.
+Conviene tenerlo presente al interpretar los resultados del bloque 4.
+
+**Distribución de las etiquetas y de las partidas:**
+
+| Medida | Valor |
+|---|---|
+| Mueven blancas / mueven negras | 49,68 % / 50,32 % |
+| `value_white` medio | +0,0463 (≈ **+18,5 centipeones**) |
+| `value_white` desvío | 0,4880 |
+| Posiciones con mate forzado | 36.486 (1,43 %) |
+| ELO medio (blancas / negras) | 2.363 / 2.363 |
+| Ply medio / mediano | 47,7 / 41 |
+| Rango de ply | 0 – 598 |
+| Posiciones en las primeras 10 medias jugadas | 1,95 % |
+
+**Rendimiento del filtro sobre el dump:** se recorrieron 91.189.178 partidas y
+pasaron el filtro 1.661.093, una tasa de aceptación del **1,82 %** (el survey
+previo sobre 1.000.072 partidas había estimado 1,76 %, así que la estimación
+resultó buena). De esas partidas aceptadas se consumió el **47 %** para llegar a
+2,5 millones de posiciones: el extracto de un solo mes alcanza de sobra, y queda
+margen para ampliar el dataset sin descargar otro dump.
+
+**Deduplicación:** de las posiciones muestreadas se descartaron las repetidas
+contra todo lo ya publicado. La tasa crece a medida que el dataset se llena
+—1.560 duplicados en el primer shard, 2.558 en el quinto— porque cada shard
+nuevo se compara contra un conjunto mayor. El rendimiento sobre el techo teórico
+(4 posiciones × 5.000 partidas por shard) fue del 88,2 % en los primeros cinco
+shards.
 
 ## Contenido
 
@@ -20,7 +76,7 @@ Stockfish a profundidad controlada.
 | Aspecto | Valor |
 |---|---|
 | Fuente | [database.lichess.org](https://database.lichess.org) — dumps mensuales de partidas estándar |
-| Meses incluidos | Ver la columna `src_dump` (se registra por fila) |
+| Meses incluidos | **`2025-06`**, único dump (se registra por fila en `src_dump`) |
 | Licencia | CC0 — dominio público |
 | Uso | Académico, Trabajo Final de la CEIA-FIUBA |
 
@@ -59,7 +115,7 @@ asistido.
 
 | Aspecto | Valor |
 |---|---|
-| Motor | Stockfish — la versión exacta se registra en la columna `sf_version` |
+| Motor | **Stockfish 17.1** — verificado: `sf_version` toma ese único valor en las 2.552.804 filas |
 | Versión fijada por el script | `sf_17.1` (ver `scripts/setup_stockfish.sh`) |
 | Profundidad de búsqueda | **12**, fija; registrada en `sf_depth` |
 | Threads por motor | 1 (el paralelismo es por procesos, no por motor) |
@@ -167,28 +223,67 @@ Corren sobre el dataset completo en cada build, vía
 7. FENs parseables y no terminales.
 8. Coherencia entre `is_mate`, `mate_in` y el límite de recorte.
 
+Resultado sobre el dataset publicado (salida de la notebook `01`, sección final,
+reproducida en la `02`): **los ocho chequeos pasan**. En particular, 2.552.804
+claves distintas sobre 2.552.804 filas —cero duplicados en todo el dataset— y
+ninguna columna con nulos.
+
+La transformación inversa también se verificó sobre el dataset completo:
+reconstruir los centipeones desde `value_white` y compararlos con la columna
+`cp_white` da un error máximo de **0,0138 centipeones** y un error medio de
+0,000009. Es el requerimiento 4.2 medido, no argumentado.
+
 ### Validación manual del etiquetado
 
 Mitigación del Riesgo 4 del plan (errores sistemáticos en el etiquetado con
 Stockfish). Evaluaciones sobre posiciones de referencia con valor conocido,
-medidas a profundidad 12:
+medidas con **Stockfish 17.1 a profundidad 12** —la misma versión y profundidad
+que etiquetaron el dataset— a través de `chessdl.data.labeling.analyse_fen`, que
+es el mismo camino de código que usa el pipeline:
 
 | Posición | cp_white | value_white |
 |---|---|---|
-| Posición inicial | +40 | +0.0997 |
-| Blancas con torre de más | +543 | +0.8758 |
-| Final de peones equilibrado | −1 | −0.0025 |
-| Rey y dama vs. rey (ventaja blancas) | +2000 | +0.9999 |
-| Rey y dama vs. rey (ventaja negras) | −2000 | −0.9999 |
-| Mate en 1 para las blancas | +2000 (mate en 1) | +0.9999 |
+| Posición inicial | +33 | +0,0823 |
+| Blancas con torre de más | +569 | +0,8901 |
+| Final de peones equilibrado | −12 | −0,0300 |
+| Rey y dama vs. rey, ventaja blancas (negras al turno) | +501 | +0,8490 |
+| Rey y dama vs. rey, ventaja negras (blancas al turno) | −510 | −0,8551 |
+| Mate en 1 para las blancas | +2000 (mate en 1) | +0,9999 |
 
-Los valores son los esperados: la posición inicial queda cerca de cero con una
-leve ventaja para las blancas, las ventajas materiales decisivas saturan en ±1, y
-la misma posición espejada produce el signo opuesto.
+Los valores son los esperados: la posición inicial queda apenas por encima de
+cero, las ventajas materiales grandes dan valores altos pero no saturados, el
+mate forzado sí satura en ±1, y las dos posiciones espejadas (filas 4 y 5, que
+son la misma posición con los colores invertidos) dan el signo opuesto y
+magnitudes que coinciden dentro del 2 %.
 
-> Los valores de esta tabla se midieron con Stockfish 16. Al regenerar el dataset
-> con la versión fijada en `setup_stockfish.sh` conviene rehacer la tabla; las
-> magnitudes deberían moverse poco y los signos nada.
+> Una corrección respecto de la versión anterior de esta tabla, que se había
+> medido con Stockfish 16: las filas de rey y dama contra rey **no** saturan en
+> ±2000. A profundidad 12 el motor todavía no ve el mate forzado desde esas
+> posiciones y las evalúa por material, alrededor de ±500. Saturar requiere que
+> el motor anuncie mate, que es lo que ocurre en la última fila.
+
+### Prueba de consistencia sobre el dataset completo
+
+Un control que no depende de posiciones elegidas a mano. Separando el dataset
+según quién mueve y llevando las dos mitades a la escala de las blancas:
+
+| Medida | Blancas al turno | Negras al turno (reflejada) |
+|---|---|---|
+| Media | +0,0897 | +0,0035 |
+| Desvío | 0,4848 | 0,4869 |
+| \|valor\| medio | 0,3829 | 0,3741 |
+
+Los desvíos y las magnitudes medias coinciden: las dos mitades del dataset son
+la misma distribución. La **diferencia de medias, +0,0862, no es un error**: es
+el valor de tener la jugada. Traducido con la transformación inversa da
+**+34,6 centipeones**, que coincide con la evaluación que el propio Stockfish le
+da a la posición inicial en la tabla de arriba (+33 cp). Dos mediciones
+independientes —una sobre 2,5 millones de posiciones reales, otra sobre una sola
+posición— llegan al mismo número.
+
+De ahí sale también la ventaja global de las blancas en el dataset, +0,0463
+(+18,5 cp): es el promedio de las dos mitades, porque la mitad de las posiciones
+tiene a las negras al turno.
 
 ## Limitaciones conocidas
 
@@ -202,6 +297,21 @@ la misma posición espejada produce el signo opuesto.
 - **Sesgo hacia posiciones desequilibradas.** Al muestrear uniformemente sobre
   toda la partida, los finales —donde la evaluación suele estar definida— aportan
   su parte, así que la distribución de etiquetas no está centrada en cero.
+- **El dataset es casi todo Blitz (91,4 %).** El filtro admite Blitz, Rapid y
+  Classical, pero la composición real de Lichess hace que Classical aporte el
+  0,29 %. Si el bloque 4 mostrara que el ritmo de juego importa, la forma de
+  corregirlo es muestrear por categoría, no cambiar el filtro.
+- **Un solo mes de partidas (`2025-06`).** Alcanza para el volumen buscado, pero
+  todo lo que sea estacional o propio de la meta de ese mes queda dentro del
+  dataset sin contrapeso.
+- **El etiquetado depende de que el binario de Stockfish sea sólido en la
+  máquina.** Se detectó un entorno donde Stockfish 17.1 —tanto el build `avx2`
+  como el portable `x86-64`— muere con SIGSEGV al buscar en finales con muy poco
+  material, aunque analiza posiciones normales sin problema. En Colab, donde se
+  construyó este dataset, no ocurre. El pipeline reintenta con un motor nuevo y
+  descarta la posición que falla dos veces, así que el efecto sería perder
+  finales en silencio; por eso `scripts/setup_stockfish.sh` ahora avisa cuando
+  detecta ese comportamiento.
 - **El recorte a ±2000 comprime el extremo superior.** Todas las ventajas
   decisivas se ven iguales para la red. Es deliberado: la diferencia entre "gana"
   y "gana más" no es información útil para elegir una jugada.
