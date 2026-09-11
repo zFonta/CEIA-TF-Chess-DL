@@ -86,8 +86,16 @@ def material_baseline(
 ) -> tuple[BaselineScore, np.ndarray]:
     """Least-squares fit on material difference. Returns the score and the weights.
 
-    The weights are worth looking at: they should come out near the textbook
-    piece values once rescaled, and if they do not, the encoding is suspect.
+    The weights are worth looking at, but **not against the textbook 1/3/3/5/9**.
+    Those values live in centipawns; this fit is in ``value`` space, which
+    ``tanh`` compresses. A queen is +900 cp, and ``tanh(900/400) = 0.978`` against
+    ``tanh(100/400) = 0.245`` for a pawn -- a ratio of 4, not 9. Real positions
+    compress further still, because material explains only part of the label and
+    a linear fit shrinks toward the mean.
+
+    What *should* hold is the ordering (pawn < knight <= bishop < rook < queen),
+    a king weight of exactly zero -- both sides always have one, so the feature is
+    identically zero -- and a bias term close to the value of having the move.
     """
     features = material_features(train_tensors)
     coefficients, *_ = np.linalg.lstsq(features, train_targets.astype(np.float64), rcond=None)
@@ -132,4 +140,15 @@ def describe_weights(coefficients: Sequence[float]) -> str:
         lines.append(
             "posiciones de ajuste no varian el material de forma independiente."
         )
+        return "\n".join(lines)
+
+    # Without this note the natural reflex is to compare against 1/3/3/5/9 and
+    # conclude something is broken. Those values are centipawns; this fit is in
+    # value space, where tanh has already compressed the top end.
+    lines.append("")
+    lines.append("Las razones NO deben compararse con 1/3/3/5/9: esa es la escala en")
+    lines.append("centipeones. El ajuste es en espacio value, comprimido por tanh, donde")
+    lines.append("una dama (+900 cp -> 0,978) vale ~4 peones (+100 cp -> 0,245) y no 9.")
+    lines.append("Lo que tiene que cumplirse es el orden, rey = 0, y un sesgo cercano al")
+    lines.append("valor de tener la jugada.")
     return "\n".join(lines)

@@ -1,9 +1,10 @@
 """The reference points that make the network's RMSE readable.
 
-These are also the first sanity check of the whole training block: if the
-material fit does not recover something close to the textbook piece values, the
-encoding is wrong, and it is much cheaper to learn that here than after a
-training campaign.
+These are also the first sanity check of the whole training block, but the check
+is the *ordering* of the fitted piece weights, not their absolute size. The
+textbook 1/3/3/5/9 is a centipawn scale; the fit happens in ``value`` space,
+which ``tanh`` compresses, so a queen comes out worth about four pawns rather
+than nine. Testing against the textbook numbers would fail on correct code.
 """
 
 from __future__ import annotations
