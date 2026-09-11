@@ -27,6 +27,12 @@ from chessdl.colab import get_secret
 
 TOKEN_ENV_VAR = "HF_TOKEN"
 
+#: Hub repository kinds. The shards and the pipeline's working data are
+#: datasets; trained weights belong in a model repository, which is what the
+#: Hub's own tooling and the model card expect.
+DATASET = "dataset"
+MODEL = "model"
+
 
 class MissingTokenError(RuntimeError):
     """Raised when an upload is attempted without a Hugging Face token."""
@@ -44,10 +50,15 @@ def get_token(required: bool = False) -> str | None:
     return token
 
 
-def ensure_repo(repo_id: str, token: str | None = None, private: bool = False) -> str:
-    """Create the dataset repository if it does not exist yet."""
+def ensure_repo(
+    repo_id: str,
+    token: str | None = None,
+    private: bool = False,
+    repo_type: str = DATASET,
+) -> str:
+    """Create the repository if it does not exist yet."""
     api = HfApi(token=token or get_token(required=True))
-    api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
+    api.create_repo(repo_id=repo_id, repo_type=repo_type, private=private, exist_ok=True)
     return repo_id
 
 
@@ -77,14 +88,15 @@ def upload_file(
     path_in_repo: str,
     token: str | None = None,
     commit_message: str | None = None,
+    repo_type: str = DATASET,
 ) -> str:
-    """Upload an arbitrary file (a dataset card, a config snapshot) to the repo."""
+    """Upload an arbitrary file (a card, a config snapshot, a checkpoint)."""
     api = HfApi(token=token or get_token(required=True))
     api.upload_file(
         path_or_fileobj=str(Path(path)),
         path_in_repo=path_in_repo,
         repo_id=repo_id,
-        repo_type="dataset",
+        repo_type=repo_type,
         commit_message=commit_message or f"Update {path_in_repo}",
     )
     return path_in_repo
@@ -105,7 +117,12 @@ def download_dataset(
     return Path(path)
 
 
-def file_exists(repo_id: str, path_in_repo: str, token: str | None = None) -> bool:
+def file_exists(
+    repo_id: str,
+    path_in_repo: str,
+    token: str | None = None,
+    repo_type: str = DATASET,
+) -> bool:
     """Whether a file is present in the repository.
 
     A missing repository counts as a missing file: on a first run neither exists
@@ -114,7 +131,7 @@ def file_exists(repo_id: str, path_in_repo: str, token: str | None = None) -> bo
     api = HfApi(token=token or get_token())
     try:
         return api.file_exists(
-            repo_id=repo_id, filename=path_in_repo, repo_type="dataset"
+            repo_id=repo_id, filename=path_in_repo, repo_type=repo_type
         )
     except (RepositoryNotFoundError, HfHubHTTPError):
         return False
@@ -125,6 +142,7 @@ def download_file(
     path_in_repo: str,
     local_path: str | Path,
     token: str | None = None,
+    repo_type: str = DATASET,
 ) -> Path | None:
     """Fetch one file from the repository, or return None if it is not there.
 
@@ -137,7 +155,7 @@ def download_file(
         cached = hf_hub_download(
             repo_id=repo_id,
             filename=path_in_repo,
-            repo_type="dataset",
+            repo_type=repo_type,
             token=token or get_token(),
         )
     except (RepositoryNotFoundError, EntryNotFoundError, HfHubHTTPError):

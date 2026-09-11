@@ -56,6 +56,24 @@ def value_to_cp(
     return scale * math.atanh(clamped)
 
 
+def values_to_cp(
+    values: "np.ndarray",
+    scale: float = DEFAULT_SCALE,
+    cp_clip: int = DEFAULT_CP_CLIP,
+) -> "np.ndarray":
+    """Vectorised :func:`value_to_cp`, for scoring a whole split at once.
+
+    Same semantics, element for element -- a test pins the two together, because
+    two implementations of one transform is exactly the sort of pair that drifts
+    apart without anything failing.
+    """
+    import numpy as np
+
+    limit = math.tanh(cp_clip / scale)
+    clamped = np.clip(np.asarray(values, dtype=np.float64), -limit, limit)
+    return scale * np.arctanh(clamped)
+
+
 def score_to_cp(
     score: chess.engine.Score,
     cp_clip: int = DEFAULT_CP_CLIP,
