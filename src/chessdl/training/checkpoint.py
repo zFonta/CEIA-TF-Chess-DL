@@ -95,22 +95,45 @@ class TrainingHistory:
 
 
 def _rng_state() -> dict[str, Any]:
-    state = {
-        "torch": torch.get_rng_state(),
+    """Capture the random state as plain bytes, not as tensors.
+
+    ``torch.load(..., map_location="cuda")`` moves *every* tensor in the payload
+    to the target device, and the RNG state is a tensor. A CUDA tensor is not a
+    valid argument to ``torch.set_rng_state``, which demands a CPU ByteTensor, so
+    loading a checkpoint on a GPU used to fail with a bare TypeError -- and it
+    failed on the resume path, which is the entire point of checkpointing.
+
+    Bytes are not tensors, so ``map_location`` leaves them alone. The RNG state
+    is not model data and has no business being moved to a device.
+    """
+    state: dict[str, Any] = {
+        "torch": torch.get_rng_state().numpy().tobytes(),
         "numpy": np.random.get_state(),
     }
     if torch.cuda.is_available():
-        state["cuda"] = torch.cuda.get_rng_state_all()
+        state["cuda"] = [s.numpy().tobytes() for s in torch.cuda.get_rng_state_all()]
     return state
+
+
+def _as_byte_tensor(value: Any) -> torch.Tensor:
+    """Coerce a stored RNG state back into the CPU ByteTensor torch expects.
+
+    Handles both formats: raw bytes (written by :func:`_rng_state`) and the
+    tensors that earlier checkpoints stored, which may arrive on the wrong device
+    after ``map_location``.
+    """
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().to(torch.uint8)
+    return torch.frombuffer(bytearray(value), dtype=torch.uint8)
 
 
 def _restore_rng(state: dict[str, Any] | None) -> None:
     if not state:
         return
-    torch.set_rng_state(state["torch"])
+    torch.set_rng_state(_as_byte_tensor(state["torch"]))
     np.random.set_state(state["numpy"])
     if "cuda" in state and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(state["cuda"])
+        torch.cuda.set_rng_state_all([_as_byte_tensor(s) for s in state["cuda"]])
 
 
 def save_checkpoint(

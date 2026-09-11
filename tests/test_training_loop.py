@@ -326,3 +326,72 @@ class TestHistoryIsAlwaysWritten:
             store.local_path(HISTORY_NAME).read_text(encoding="utf-8")
         )
         assert restored.baselines["material"] == pytest.approx(0.3973)
+
+
+class TestRngStateSurvivesMapLocation:
+    """Loading a checkpoint onto a GPU used to raise a bare TypeError.
+
+    `torch.load(..., map_location="cuda")` moves every tensor in the payload to
+    the target device, and the RNG state was stored as a tensor. A CUDA tensor is
+    not a valid argument to `torch.set_rng_state`, which demands a CPU
+    ByteTensor. It broke the resume path -- the whole reason checkpoints exist --
+    and no CPU test could see it.
+    """
+
+    def test_the_stored_rng_state_contains_no_tensors(self, tmp_path, data):
+        """The root-cause assertion: map_location cannot touch what is not a tensor."""
+        cache, _ = data
+        model = ChessResNet(TINY)
+        optimiser = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        path = save_checkpoint(
+            tmp_path / "c.pt", model, optimiser, None, 1, TrainingHistory(run_name="t"), {}
+        )
+
+        payload = torch.load(path, map_location="cpu", weights_only=False)
+        rng = payload["rng_state"]
+
+        assert not isinstance(rng["torch"], torch.Tensor)
+        assert isinstance(rng["torch"], (bytes, bytearray))
+        for entry in rng.get("cuda", []):
+            assert not isinstance(entry, torch.Tensor)
+
+    def test_restores_from_the_byte_format(self, tmp_path, data):
+        from chessdl.training.checkpoint import _restore_rng, _rng_state
+
+        before = torch.get_rng_state()
+        state = _rng_state()
+        torch.rand(10)  # move the generator on
+        _restore_rng(state)
+
+        assert torch.equal(torch.get_rng_state(), before)
+
+    def test_still_reads_the_old_tensor_format(self):
+        """Checkpoints written before the fix must keep loading.
+
+        A campaign in flight has checkpoints in the old format; refusing them
+        would throw away the run.
+        """
+        from chessdl.training.checkpoint import _restore_rng
+
+        before = torch.get_rng_state()
+        legacy = {"torch": before.clone(), "numpy": np.random.get_state()}
+        torch.rand(10)
+        _restore_rng(legacy)
+
+        assert torch.equal(torch.get_rng_state(), before)
+
+    def test_tolerates_a_state_moved_off_cpu(self):
+        """What map_location actually did to the old format.
+
+        A CUDA tensor cannot be built on this machine, so the test uses the other
+        half of the same failure: a tensor that is no longer a ByteTensor. The
+        coercion has to handle it rather than hand it straight to torch.
+        """
+        from chessdl.training.checkpoint import _as_byte_tensor
+
+        moved = torch.get_rng_state().to(torch.float32)
+        coerced = _as_byte_tensor(moved)
+
+        assert coerced.dtype == torch.uint8
+        assert coerced.device.type == "cpu"
+        torch.set_rng_state(coerced)  # must not raise
