@@ -38,11 +38,17 @@ class ResNetConfig:
     value_channels: int = 32
     value_hidden: int = 256
     input_planes: int = N_PLANES
+    #: Dropout before the last linear layer of the value head. Zero by default,
+    #: which is the network the first campaign trained. It exists because that
+    #: campaign overfitted from epoch 14 on, and the head's 2048 -> 256 layer is
+    #: where the fully-connected parameters are concentrated.
+    dropout: float = 0.0
 
     def describe(self) -> str:
+        extra = f", dropout {self.dropout}" if self.dropout else ""
         return (
             f"ResNet {self.channels} canales x {self.blocks} bloques "
-            f"(cabeza {self.value_channels}/{self.value_hidden})"
+            f"(cabeza {self.value_channels}/{self.value_hidden}{extra})"
         )
 
 
@@ -73,7 +79,9 @@ class ResidualBlock(nn.Module):
 class ValueHead(nn.Module):
     """Collapse the board representation to a single evaluation in [-1, 1]."""
 
-    def __init__(self, channels: int, value_channels: int, hidden: int) -> None:
+    def __init__(
+        self, channels: int, value_channels: int, hidden: int, dropout: float = 0.0
+    ) -> None:
         super().__init__()
         # A 1x1 convolution first: it cuts the width before the flatten, which is
         # where the parameter count would otherwise explode (8*8*channels).
@@ -81,12 +89,15 @@ class ValueHead(nn.Module):
         self.norm = nn.BatchNorm2d(value_channels)
         self.relu = nn.ReLU(inplace=True)
         self.fc1 = nn.Linear(value_channels * 8 * 8, hidden)
+        # Dropout carries no parameters, so adding it leaves the state dict
+        # unchanged and checkpoints from before it existed still load.
+        self.dropout = nn.Dropout(dropout) if dropout else nn.Identity()
         self.fc2 = nn.Linear(hidden, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.relu(self.norm(self.conv(x)))
         out = out.flatten(start_dim=1)
-        out = self.relu(self.fc1(out))
+        out = self.dropout(self.relu(self.fc1(out)))
         return torch.tanh(self.fc2(out)).squeeze(-1)
 
 
@@ -116,7 +127,10 @@ class ChessResNet(nn.Module):
             *(ResidualBlock(self.config.channels) for _ in range(self.config.blocks))
         )
         self.value_head = ValueHead(
-            self.config.channels, self.config.value_channels, self.config.value_hidden
+            self.config.channels,
+            self.config.value_channels,
+            self.config.value_hidden,
+            self.config.dropout,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

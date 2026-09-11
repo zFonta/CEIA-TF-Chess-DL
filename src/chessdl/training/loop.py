@@ -63,6 +63,22 @@ class TrainingRun:
         return "\n".join(lines)
 
 
+def seed_everything(seed: int) -> None:
+    """Seed the generators that decide a run's initial weights.
+
+    Must be called **before** the model is constructed. ``train`` also seeds, but
+    by then the caller has already built the network, so the initial weights come
+    from whatever state the interpreter happened to be in -- which is not
+    reproducible across sessions, and across the arms of a sweep means every arm
+    starts somewhere different. With differences between arms expected to be a
+    few percent, that noise would be the same size as the effect being measured.
+    """
+    torch.manual_seed(seed)
+    np.random.seed(seed % (2**32))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def epoch_rng(seed: int, epoch: int) -> np.random.Generator:
     """The generator that shuffles one epoch, derived from ``(seed, epoch)``.
 
@@ -73,6 +89,28 @@ def epoch_rng(seed: int, epoch: int) -> np.random.Generator:
     resumed run no longer matches the uninterrupted one it claims to continue.
     """
     return np.random.default_rng([seed, epoch])
+
+
+def _build_scheduler(optimizer, epochs: int, warmup_epochs: int):
+    """Cosine annealing, optionally preceded by a linear warm-up.
+
+    The first campaign spiked on validation at epochs 2, 4 and 10 while the
+    learning rate was still near its maximum -- epoch 2 came back worse than
+    predicting the mean. Ramping the rate up over the first epochs is the usual
+    remedy, and each of those spikes cost roughly four minutes of GPU to undo.
+    """
+    cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=max(1, epochs - warmup_epochs)
+    )
+    if warmup_epochs <= 0:
+        return cosine
+
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.1, total_iters=warmup_epochs
+    )
+    return torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[warmup, cosine], milestones=[warmup_epochs]
+    )
 
 
 def _batches(
@@ -147,6 +185,7 @@ def train(
     learning_rate: float = 1e-3,
     weight_decay: float = 1e-4,
     loss_name: str = "mse",
+    warmup_epochs: int = 0,
     device: str | None = None,
     seed: int = 20260911,
     checkpoints: HubCheckpoints | None = None,
@@ -168,7 +207,7 @@ def train(
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    scheduler = _build_scheduler(optimizer, epochs, warmup_epochs)
     scaler = torch.amp.GradScaler("cuda", enabled=amp)
 
     history = TrainingHistory(
@@ -181,7 +220,9 @@ def train(
             "weight_decay": weight_decay,
             "loss": describe_loss(loss_name),
             "optimizer": "AdamW",
-            "scheduler": "CosineAnnealingLR",
+            "scheduler": ("LinearWarmup+CosineAnnealingLR" if warmup_epochs
+                          else "CosineAnnealingLR"),
+            "warmup_epochs": warmup_epochs,
             "amp": amp,
             "seed": seed,
             "train_positions": int(len(train_indices)),
