@@ -56,6 +56,12 @@ def has_gpu() -> bool:
     return os.system("nvidia-smi -L > /dev/null 2>&1") == 0
 
 
+#: The two phases of the project want opposite runtimes, so the advice has to
+#: know which one is asking. Labelling is pure CPU work; training is not.
+LABELLING = "labelling"
+TRAINING = "training"
+
+
 @dataclass(frozen=True)
 class RuntimeInfo:
     """What the current runtime looks like, for the notebook to print."""
@@ -64,21 +70,34 @@ class RuntimeInfo:
     cpu_count: int
     gpu_present: bool
     stockfish_path: str | None
+    phase: str = LABELLING
 
     def warnings(self) -> list[str]:
         messages: list[str] = []
-        if self.gpu_present:
-            messages.append(
-                "A GPU runtime is active, but labelling with Stockfish is pure CPU "
-                "work and Colab's GPU runtimes come with fewer vCPUs. Switch to a "
-                "CPU runtime: it will be faster here and it saves your GPU quota "
-                "for training."
-            )
-        if self.stockfish_path is None:
-            messages.append(
-                "Stockfish was not found on PATH. Run scripts/setup_stockfish.sh "
-                "before building the dataset."
-            )
+
+        if self.phase == LABELLING:
+            if self.gpu_present:
+                messages.append(
+                    "A GPU runtime is active, but labelling with Stockfish is pure "
+                    "CPU work and Colab's GPU runtimes come with fewer vCPUs. "
+                    "Switch to a CPU runtime: it will be faster here and it saves "
+                    "your GPU quota for training."
+                )
+            if self.stockfish_path is None:
+                messages.append(
+                    "Stockfish was not found on PATH. Run scripts/setup_stockfish.sh "
+                    "before building the dataset."
+                )
+        elif self.phase == TRAINING:
+            if not self.gpu_present:
+                messages.append(
+                    "No GPU is visible. Training will fall back to the CPU and take "
+                    "hours per epoch instead of minutes. Switch to a GPU runtime "
+                    "(T4 is the right choice for this model size)."
+                )
+            # Stockfish is irrelevant here: nothing in the training block calls
+            # the engine, so its absence is not worth a warning.
+
         return messages
 
     def summary(self) -> str:
@@ -92,8 +111,19 @@ class RuntimeInfo:
         return "\n".join(lines).rstrip()
 
 
-def describe_runtime(engine_path: str = "stockfish") -> RuntimeInfo:
-    """Inspect the runtime and flag anything that would slow the run down."""
+def describe_runtime(
+    engine_path: str = "stockfish", phase: str = LABELLING
+) -> RuntimeInfo:
+    """Inspect the runtime and flag anything that would slow the run down.
+
+    ``phase`` decides what counts as a problem. The data pipeline wants CPU and
+    a working engine; training wants a GPU and does not care about the engine.
+    Giving the same advice in both cases would be confidently wrong in one of
+    them.
+    """
+    if phase not in (LABELLING, TRAINING):
+        raise ValueError(f"phase must be {LABELLING!r} or {TRAINING!r}, got {phase!r}")
+
     resolved = shutil.which(engine_path)
     if resolved is None and Path(engine_path).is_file():
         resolved = str(Path(engine_path).resolve())
@@ -102,4 +132,5 @@ def describe_runtime(engine_path: str = "stockfish") -> RuntimeInfo:
         cpu_count=os.cpu_count() or 1,
         gpu_present=has_gpu(),
         stockfish_path=resolved,
+        phase=phase,
     )

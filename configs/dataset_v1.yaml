@@ -67,3 +67,33 @@ output:
 validation:
   # Requerimiento 1.3: ninguna clase de turno puede superar este porcentaje.
   max_turn_share: 0.55
+
+training:
+  # Particion POR PARTIDA, nunca por posicion. Hay 4 posiciones por partida y
+  # comparten apertura, jugadores y estructura: partir por posicion deja
+  # hermanas de la misma partida en entrenamiento y en test, lo que infla la
+  # validacion y solo se descubre cuando el motor rinde peor que las metricas.
+  #
+  # La semilla es parte de la identidad del modelo: define que partidas nunca
+  # vio. Cambiarla invalida cualquier metrica de test ya reportada.
+  split_train: 0.90
+  split_val: 0.05
+  split_test: 0.05
+  split_seed: 20260911
+
+  # Cache de tensores precomputados. Derivado y descartable: se reconstruye
+  # desde los FEN del dataset, que siguen siendo la fuente de verdad.
+  cache_dir: /content/ceia-chess/cache
+
+  # Lote grande a proposito: con un tablero de 8x8 un lote chico deja la GPU
+  # sin trabajo entre kernels.
+  batch_size: 1024
+  epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  # mse | huber -- huber se evalua en 4.5 por la masa acumulada en +-0,9999
+  loss: mse
+
+  # Tercer repositorio del proyecto, de tipo Model: pesos, metricas y estado.
+  hf_models_repo: ceia-chess-models
+  push_to_hub: true

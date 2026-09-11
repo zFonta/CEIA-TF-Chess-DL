@@ -23,7 +23,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# `train` is separate from the core dependencies on purpose: the data pipeline
+# has no use for PyTorch, and pulling it in would make every pipeline run drag
+# a multi-gigabyte install behind it.
+train = ["torch>=2.2"]
+dev = ["pytest>=8.0", "torch>=2.2"]
 
 [project.scripts]
 chessdl-build-dataset = "chessdl.scripts.build_dataset:main"

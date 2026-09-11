@@ -136,6 +136,53 @@ class ValidationConfig:
 
 
 @dataclass(frozen=True)
+class TrainingConfig:
+    """Parameters of the neural network block (WBS 4).
+
+    The split fractions and seed belong here rather than in code because they
+    define which games a model never saw. A trained model's test metrics are only
+    meaningful together with these values, so they are versioned with the config
+    and recorded alongside the weights.
+    """
+
+    # Partition, by game (never by position).
+    split_train: float = 0.90
+    split_val: float = 0.05
+    split_test: float = 0.05
+    split_seed: int = 20260911
+
+    # Where the derived tensor cache lives. Disposable: it is rebuilt from the
+    # FENs in the dataset, which remain the source of truth.
+    cache_dir: str = "/content/ceia-chess/cache"
+
+    batch_size: int = 1024
+    epochs: int = 30
+    learning_rate: float = 1e-3
+    weight_decay: float = 1e-4
+    loss: str = "mse"
+
+    # Durable storage for weights, metrics and resume state. A *model*
+    # repository, separate from the two dataset repositories.
+    hf_models_repo: str = "ceia-chess-models"
+    push_to_hub: bool = True
+
+    def split_config(self):
+        """The partition as :class:`chessdl.training.split.SplitConfig`.
+
+        Imported lazily so that loading a config does not pull in the training
+        package, which the data pipeline has no use for.
+        """
+        from .training.split import SplitConfig
+
+        return SplitConfig(
+            train=self.split_train,
+            val=self.split_val,
+            test=self.split_test,
+            seed=self.split_seed,
+        )
+
+
+@dataclass(frozen=True)
 class DatasetConfig:
     """Root configuration object."""
 
@@ -147,6 +194,7 @@ class DatasetConfig:
     normalization: NormalizationConfig = field(default_factory=NormalizationConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     validation: ValidationConfig = field(default_factory=ValidationConfig)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "DatasetConfig":
@@ -176,6 +224,7 @@ _SECTIONS: dict[str, type] = {
     "normalization": NormalizationConfig,
     "output": OutputConfig,
     "validation": ValidationConfig,
+    "training": TrainingConfig,
 }
 
 
