@@ -323,11 +323,23 @@ def run_sweep(
     by epoch 14, and because the cosine schedule anneals over whatever budget it
     is given -- each run is a complete short campaign, not a truncated long one.
 
-    One caveat worth keeping in mind when reading the results: screening
-    regularisation at a reduced budget is not neutral. Less training favours less
-    regularisation, so a weight-decay or dropout setting that wins here may be
-    conservative for the full-length campaign. The winner is confirmed at full
-    length in task 4.6, not adopted from this table alone.
+    One caveat worth keeping in mind when reading the results: **a reduced
+    budget is never a neutral referee**, and which way it leans depends on what
+    is being screened.
+
+    * Screening *regularisation*, as the ResNet's sweep did: less training
+      favours less regularisation, so a weight-decay or dropout setting that
+      wins here may be conservative at full length.
+    * Screening *optimisation speed*, as the transformer's does: a short budget
+      favours whatever moves fastest early. An arm with a smaller batch takes
+      more steps per epoch, and an architecture with a shorter gradient path
+      gets going sooner -- neither advantage need survive to the end.
+
+    Both biases point at the arm being tested rather than at the control, which
+    is precisely the direction that flatters a false positive. So the winner is
+    confirmed at full length rather than adopted from this table alone -- and if
+    the winner is not the control, confirming it measures how good the best
+    configuration is, not which change earned it.
 
     ``model_factory`` and ``model_summary`` default to the ResNet, so the calls
     from task 4.5 are unchanged. Pass ``ChessTransformer`` and
