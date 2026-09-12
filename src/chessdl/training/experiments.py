@@ -25,11 +25,12 @@ and skipped, and a half-finished one continues from its last epoch.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
 from ..models.resnet import ChessResNet, ResNetConfig
+from ..models.transformer import TransformerConfig
 from .checkpoint import HubCheckpoints
 from .loop import TrainingRun, seed_everything, train
 
@@ -46,10 +47,30 @@ class Experiment:
     weight_decay: float | None = None
     loss_name: str | None = None
     warmup_epochs: int = 0
-    dropout: float = 0.0
+    #: ``None`` means "leave the architecture's own default alone", which is not
+    #: the same as 0.0. The ResNet defaults to no dropout, so the two coincided
+    #: there; the transformer defaults to 0.1 inside its encoder layers, and a
+    #: sweep arm that was not about dropout would otherwise turn it off without
+    #: saying so -- a confound that looks like a result.
+    dropout: float | None = None
+    #: Architecture fields other than dropout, for sweeps over the shape of the
+    #: network rather than the optimiser -- the transformer's pooling, say, or
+    #: its depth. Applied with ``dataclasses.replace``, so the keys have to be
+    #: fields of the base configuration.
+    architecture: tuple[tuple[str, Any], ...] = ()
 
-    def model_config(self, base: ResNetConfig) -> ResNetConfig:
-        return replace(base, dropout=self.dropout)
+    def model_config(self, base: Any) -> Any:
+        """The architecture this experiment trains, as a delta from ``base``.
+
+        Typed loosely on purpose: it works for any frozen configuration
+        dataclass with a ``dropout`` field, which is what both
+        :class:`~chessdl.models.resnet.ResNetConfig` and
+        :class:`~chessdl.models.transformer.TransformerConfig` are.
+        """
+        changes: dict[str, Any] = dict(self.architecture)
+        if self.dropout is not None:
+            changes["dropout"] = self.dropout
+        return replace(base, **changes)
 
     def overrides(self) -> dict[str, Any]:
         """Only the fields this experiment actually changes."""
@@ -161,6 +182,33 @@ class SweepResult:
         return "\n".join(lines)
 
 
+def resnet_summary(config: ResNetConfig) -> dict[str, Any]:
+    """What gets recorded in ``history.json`` for a ResNet run.
+
+    Kept as an explicit short list rather than ``dataclasses.asdict`` so the
+    histories already published for campaigns 1 and 2 stay comparable with the
+    ones this sweep writes.
+    """
+    return {
+        "channels": config.channels,
+        "blocks": config.blocks,
+        "dropout": config.dropout,
+    }
+
+
+def transformer_summary(config: TransformerConfig) -> dict[str, Any]:
+    """What gets recorded in ``history.json`` for a transformer run."""
+    return {
+        "d_model": config.d_model,
+        "layers": config.layers,
+        "heads": config.heads,
+        "feedforward": config.feedforward,
+        "pooling": config.pooling,
+        "dropout": config.dropout,
+        "head_dropout": config.head_dropout,
+    }
+
+
 def run_sweep(
     experiments: tuple[Experiment, ...],
     cache: np.ndarray,
@@ -168,7 +216,7 @@ def run_sweep(
     train_indices: np.ndarray,
     val_indices: np.ndarray,
     *,
-    base_model: ResNetConfig,
+    base_model: Any,
     repo_id: str,
     local_dir: str,
     token: str | None,
@@ -177,6 +225,8 @@ def run_sweep(
     prefix: str = "sweep",
     baselines: dict[str, float] | None = None,
     reference: float | None = None,
+    model_factory: Callable[[Any], Any] = ChessResNet,
+    model_summary: Callable[[Any], dict[str, Any]] = resnet_summary,
     **campaign,
 ) -> SweepResult:
     """Run each experiment in turn and collect the results.
@@ -191,6 +241,12 @@ def run_sweep(
     regularisation, so a weight-decay or dropout setting that wins here may be
     conservative for the full-length campaign. The winner is confirmed at full
     length in task 4.6, not adopted from this table alone.
+
+    ``model_factory`` and ``model_summary`` default to the ResNet, so the calls
+    from task 4.5 are unchanged. Pass ``ChessTransformer`` and
+    ``transformer_summary`` to sweep the second architecture: the loop, the
+    resume logic and the comparison table are the same, and writing them twice
+    would be two places for the arms to stop being comparable.
     """
     result = SweepResult(baselines=baselines or {}, reference=reference)
 
@@ -215,17 +271,13 @@ def run_sweep(
         seed_everything(int(settings.get("seed", 20260911)))
 
         run = train(
-            ChessResNet(model_config),
+            model_factory(model_config),
             cache,
             targets,
             train_indices,
             val_indices,
             checkpoints=checkpoints,
-            model_config={
-                "channels": model_config.channels,
-                "blocks": model_config.blocks,
-                "dropout": model_config.dropout,
-            },
+            model_config=model_summary(model_config),
             baselines=baselines,
             **settings,
         )

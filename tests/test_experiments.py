@@ -65,6 +65,26 @@ class TestExperimentOverrides:
         assert "dropout" not in experiment.overrides()
         assert experiment.model_config(TINY).dropout == 0.3
 
+    def test_an_arm_that_does_not_mention_dropout_leaves_it_alone(self):
+        """Not the same as setting it to zero.
+
+        The ResNet defaults to no dropout so the two used to coincide, but the
+        transformer defaults to 0.1 inside its encoder. An arm about weight decay
+        that silently turned that off would be measuring two changes at once.
+        """
+        from chessdl.models.transformer import TransformerConfig
+
+        base = TransformerConfig(dropout=0.1)
+        assert Experiment("x", "y", weight_decay=1e-3).model_config(base).dropout == 0.1
+        assert Experiment("x", "y", dropout=0.0).model_config(base).dropout == 0.0
+
+    def test_architecture_fields_other_than_dropout_can_be_swept(self):
+        from chessdl.models.transformer import TransformerConfig
+
+        experiment = Experiment("x", "y", architecture=(("pooling", "mean"),))
+        assert experiment.model_config(TransformerConfig()).pooling == "mean"
+        assert "pooling" not in experiment.overrides()
+
     def test_the_default_sweep_changes_something_in_every_arm(self):
         """A sweep arm that changes nothing is a wasted hour of GPU."""
         for experiment in DEFAULT_SWEEP:
@@ -169,6 +189,42 @@ class TestSweep:
             push_to_hub=False, epochs=1, batch_size=64, device="cpu", progress=False,
         )
         assert result.runs["d"].history.model["dropout"] == 0.25
+
+
+class TestSweepsAnyArchitecture:
+    """The transformer reuses the sweep rather than getting a second one.
+
+    Two implementations would be two places for the arms to drift apart, and the
+    point of the sweep is that the arms differ only in the hyperparameter.
+    """
+
+    def test_the_factory_decides_which_network_is_trained(self, tmp_path, data):
+        from chessdl.models.transformer import ChessTransformer, TransformerConfig
+        from chessdl.training.experiments import transformer_summary
+
+        cache, targets = data
+        config = TransformerConfig(d_model=32, layers=1, heads=4, feedforward=64)
+        result = run_sweep(
+            (Experiment("t", "transformer"),),
+            cache, targets, np.arange(0, 192), np.arange(192, 240),
+            base_model=config, repo_id="x/y", local_dir=str(tmp_path), token=None,
+            push_to_hub=False, epochs=1, batch_size=64, device="cpu", progress=False,
+            model_factory=ChessTransformer, model_summary=transformer_summary,
+            amp=False,
+        )
+        assert result.runs["t"].best is not None
+        assert result.runs["t"].history.model["d_model"] == 32
+
+    def test_the_resnet_history_is_recorded_exactly_as_before(self, tmp_path, data):
+        """Campaigns 1 and 2 are already published; their fields must not move."""
+        cache, targets = data
+        result = run_sweep(
+            (Experiment("a", "control"),),
+            cache, targets, np.arange(0, 192), np.arange(192, 240),
+            base_model=TINY, repo_id="x/y", local_dir=str(tmp_path), token=None,
+            push_to_hub=False, epochs=1, batch_size=64, device="cpu", progress=False,
+        )
+        assert set(result.runs["a"].history.model) == {"channels", "blocks", "dropout"}
 
 
 class TestEmptySweepResult:

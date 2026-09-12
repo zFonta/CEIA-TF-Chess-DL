@@ -270,13 +270,32 @@ caché de entrenamiento, descartable.
 
 ## Secuencia de trabajo
 
-| Tarea del plan | Contenido |
-|---|---|
-| 4.1 Entorno de entrenamiento (12 h) | `Dataset` de PyTorch, partición por partida, caché de tensores, baselines de referencia, notebook `03` |
-| 4.2 Arquitectura residual (30 h) | ResNet + diagrama de arquitectura |
-| 4.3 Función de pérdida (16 h) | MSE, con Huber como alternativa instrumentada |
-| 4.4 Primera campaña (20 h) | Entrenamiento y diagnóstico contra los baselines |
-| 4.5 Hiperparámetros (30 h) | Ajuste, y las variantes marcadas arriba como experimentos |
-| 4.6 Segunda campaña (20 h) | Configuración optimizada |
-| 4.7 Validación y test (16 h) | Métricas sobre el split de test, tiempo de inferencia por lote, desglose por control de tiempo |
-| 4.8 Transformer (36 h) | Arquitectura, entrenamiento con el mismo presupuesto, comparación |
+| Tarea del plan | Contenido | Notebook |
+|---|---|---|
+| 4.1 Entorno de entrenamiento (12 h) | `Dataset` de PyTorch, partición por partida, caché de tensores, baselines de referencia | `03_train_resnet` |
+| 4.2 Arquitectura residual (30 h) | ResNet + diagrama de arquitectura | `03_train_resnet` |
+| 4.3 Función de pérdida (16 h) | MSE, con Huber como alternativa instrumentada | `04_train_campaign` |
+| 4.4 Primera campaña (20 h) | Entrenamiento y diagnóstico contra los baselines | `04_train_campaign` |
+| 4.5 Hiperparámetros (30 h) | Ajuste, y las variantes marcadas arriba como experimentos | `05_hyperparameters` |
+| 4.6 Segunda campaña (20 h) | Configuración optimizada | `05_hyperparameters` |
+| 4.7 Validación y test (16 h) | Métricas sobre el split de test, tiempo de inferencia por lote, desglose por control de tiempo | pendiente |
+| 4.8 Transformer (36 h) | Arquitectura, entrenamiento con el mismo presupuesto, comparación | `06_train_transformer` |
+
+### Resultados hasta acá
+
+Sobre el split de test, que se toca una sola vez por campaña:
+
+| | test RMSE | R² | MAE cp | signo | ρ |
+|---|---|---|---|---|---|
+| Piso: media constante | 0,4886 | 0,000 | — | — | — |
+| Piso: material lineal | 0,3973 | 0,339 | — | — | — |
+| ResNet campaña 1 | 0,2609 | 0,715 | 110,5 | 86,74 % | 0,8240 |
+| **ResNet campaña 2** (warm-up, 30 épocas) | **0,2511** | **0,736** | **105,8** | **87,80 %** | **0,8385** |
+| Transformer campaña 1 | pendiente | | | | |
+
+El barrido de la tarea 4.5 lo ganó el **calentamiento del learning rate**
+(0,2429 sobre validación contra 0,2607 del segundo), consistente con los picos
+de validación que la campaña 1 mostró en las épocas 2, 4 y 10. La campaña 2
+confirmó esa configuración a 30 épocas y mejoró el test un 3,74 %, aunque las
+épocas 21 a 30 no aportaron nada: el mejor checkpoint es el de la época 21 y la
+razón de sobreajuste subió de 2,16 a 3,75. Ahí se cierra la ResNet.
