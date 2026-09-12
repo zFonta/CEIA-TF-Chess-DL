@@ -48,6 +48,7 @@ class Experiment:
     weight_decay: float | None = None
     loss_name: str | None = None
     warmup_epochs: int = 0
+    grad_clip: float | None = None
     #: ``None`` means "leave the architecture's own default alone", which is not
     #: the same as 0.0. The ResNet defaults to no dropout, so the two coincided
     #: there; the transformer defaults to 0.1 inside its encoder layers, and a
@@ -82,6 +83,8 @@ class Experiment:
                 out[name] = value
         if self.warmup_epochs:
             out["warmup_epochs"] = self.warmup_epochs
+        if self.grad_clip:
+            out["grad_clip"] = self.grad_clip
         return out
 
 
@@ -116,6 +119,86 @@ DEFAULT_SWEEP: tuple[Experiment, ...] = (
         name="huber",
         rationale="perdida robusta: el 1,43 % de mates saturados domina el gradiente con MSE",
         loss_name="huber",
+    ),
+)
+
+
+#: The transformer's sweep (WBS 4.8), and it pulls the opposite way to the ResNet's.
+#:
+#: The first transformer campaign landed at 0.2978 on test against the ResNet's
+#: 0.2511, and the curves say why. At epoch 30 its validation error squared over
+#: its training loss was **1.19**; the ResNet's was **3.75**. A ratio near one
+#: means validation and training are the same number: nothing is being memorised,
+#: so nothing is being over-learned. The transformer is *underfitting*.
+#:
+#: The clincher is blunter still. The transformer's final training loss (0.0759)
+#: is worse than the ResNet's validation error at its best epoch (0.0622): it
+#: cannot fit the training set as well as the ResNet generalises.
+#:
+#: So every lever that won the ResNet's sweep -- weight decay, dropout -- is
+#: exactly wrong here, and the settings the first campaign used were the cause:
+#: a learning rate three times lower than the ResNet's and a weight decay a
+#: hundred times higher, both chosen as insurance against an instability that the
+#: loss curve shows never existed. Thirty epochs, monotone, not one spike.
+#:
+#: Three arms, three different techniques rather than three learning rates. Each
+#: builds on the one before, so the sweep is staged rather than orthogonal: that
+#: is deliberate, because the diagnosis points every lever the same way and
+#: there is no budget to cross them.
+DEFAULT_TRANSFORMER_SWEEP: tuple[Experiment, ...] = (
+    # The control, and also the fairest comparison the project can make: the
+    # ResNet's exact training recipe. If the transformer trains well under it,
+    # the two architectures differ only in architecture -- same parameter
+    # budget, same optimiser, same schedule, same epochs, same data.
+    #
+    # Gradient clipping is the one addition, and it is what makes the tenfold
+    # jump in learning rate a reasonable thing to try rather than a gamble: the
+    # transformer has no batch norm to bound its activations.
+    Experiment(
+        name="receta-resnet",
+        rationale="la receta de la ResNet: lr 1e-3, wd 1e-4, sin dropout, con recorte",
+        learning_rate=1e-3,
+        weight_decay=1e-4,
+        dropout=0.0,
+        warmup_epochs=2,
+        grad_clip=1.0,
+    ),
+    # Twice the optimisation steps for the same pass over the data: 4,488 updates
+    # per epoch instead of 2,244. An underfitting model is one that has not moved
+    # far enough, and steps are how it moves.
+    #
+    # Worth stating plainly: batch size and learning rate are coupled, and
+    # halving the batch while holding the rate raises the effective step size and
+    # the gradient noise together. So this is not a clean second axis -- it is a
+    # different way of spending the same budget, and if it wins, the honest
+    # reading is "more, noisier steps helped", not "512 is the right batch".
+    Experiment(
+        name="lotes-chicos",
+        rationale="lote 512: el doble de pasos de optimizacion por epoca",
+        learning_rate=1e-3,
+        weight_decay=1e-4,
+        dropout=0.0,
+        warmup_epochs=2,
+        grad_clip=1.0,
+        batch_size=512,
+    ),
+    # The only arm that changes the network rather than how it is trained, and
+    # the only question the architecture left genuinely open.
+    #
+    # With a CLS token the value head reads one vector that has to gather the
+    # whole board through attention; the 64 squares only reach the loss through
+    # it. Averaging instead gives every square a direct path to the output and to
+    # the gradient. That matters more when a model is underfitting than when it
+    # is overfitting, which is exactly the situation. It costs 192 parameters.
+    Experiment(
+        name="pooling-medio",
+        rationale="promedio de las 64 casillas en vez del token CLS",
+        learning_rate=1e-3,
+        weight_decay=1e-4,
+        dropout=0.0,
+        warmup_epochs=2,
+        grad_clip=1.0,
+        architecture=(("pooling", "mean"),),
     ),
 )
 

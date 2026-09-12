@@ -121,6 +121,101 @@ class TestTraining:
         assert np.isfinite(out).all()
 
 
+class TestGradientClipping:
+    """Clipping is what makes a learning rate big enough to fit the data safe.
+
+    The transformer's first campaign underfitted: its validation error squared
+    over its training loss was 1.19, against the ResNet's 3.75. The fix is a much
+    larger learning rate, and a network without batch norm needs its steps
+    bounded before that is a reasonable thing to try.
+    """
+
+    def _grad_norm(self, model) -> float:
+        total = sum(
+            float(p.grad.detach().pow(2).sum())
+            for p in model.parameters()
+            if p.grad is not None
+        )
+        return total**0.5
+
+    def test_it_bounds_the_gradient_norm(self, data, splits):
+        """Checked on the gradients themselves, not inferred from the loss curve."""
+        cache, targets = data
+        train_idx, val_idx = splits
+
+        seen: list[float] = []
+        model = ChessResNet(TINY)
+        original = torch.nn.utils.clip_grad_norm_
+
+        def spy(parameters, max_norm, *args, **kwargs):
+            result = original(parameters, max_norm, *args, **kwargs)
+            seen.append(float(self._grad_norm(model)))
+            return result
+
+        torch.nn.utils.clip_grad_norm_ = spy
+        try:
+            train(
+                model, cache, targets, train_idx, val_idx,
+                epochs=1, batch_size=64, device="cpu", checkpoints=None,
+                progress=False, grad_clip=0.05, learning_rate=1e-2,
+            )
+        finally:
+            torch.nn.utils.clip_grad_norm_ = original
+
+        assert seen, "no se llamo al recorte"
+        # A small tolerance: the norm is recomputed after the in-place scaling.
+        assert max(seen) <= 0.05 + 1e-4, f"norma maxima {max(seen):.4f}"
+
+    def test_it_is_off_by_default(self, data, splits):
+        """The ResNet campaigns ran without it; their results must stay reproducible."""
+        cache, targets = data
+        train_idx, val_idx = splits
+        called = False
+        original = torch.nn.utils.clip_grad_norm_
+
+        def spy(*args, **kwargs):
+            nonlocal called
+            called = True
+            return original(*args, **kwargs)
+
+        torch.nn.utils.clip_grad_norm_ = spy
+        try:
+            run = train(
+                ChessResNet(TINY), cache, targets, train_idx, val_idx,
+                epochs=1, batch_size=64, device="cpu", checkpoints=None, progress=False,
+            )
+        finally:
+            torch.nn.utils.clip_grad_norm_ = original
+
+        assert not called
+        assert run.history.hyperparameters["grad_clip"] is None
+
+    def test_the_threshold_is_recorded_with_the_run(self):
+        """A clipped run and an unclipped one are different runs; the history says which."""
+        cache = np.stack([fen_to_cached(chess.Board().fen()) for _ in range(32)])
+        targets = np.zeros(32, dtype=np.float32)
+        run = train(
+            ChessResNet(TINY), cache, targets, np.arange(24), np.arange(24, 32),
+            epochs=1, batch_size=8, device="cpu", checkpoints=None,
+            progress=False, grad_clip=1.0,
+        )
+        assert run.history.hyperparameters["grad_clip"] == 1.0
+
+    def test_training_still_converges_with_clipping_on(self, data, splits):
+        cache, targets = data
+        train_idx, val_idx = splits
+        torch.manual_seed(0)
+        model = ChessResNet(TINY)
+
+        before = evaluate_split(model, cache, targets, val_idx, "cpu")
+        run = train(
+            model, cache, targets, train_idx, val_idx,
+            epochs=3, batch_size=64, device="cpu", checkpoints=None,
+            progress=False, grad_clip=1.0,
+        )
+        assert run.history.epochs[-1].val_rmse < before.rmse
+
+
 class TestCheckpointRoundTrip:
     def test_restores_weights_optimizer_and_epoch(self, tmp_path, data, splits):
         cache, targets = data

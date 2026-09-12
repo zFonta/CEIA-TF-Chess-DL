@@ -279,7 +279,7 @@ caché de entrenamiento, descartable.
 | 4.5 Hiperparámetros (30 h) | Ajuste, y las variantes marcadas arriba como experimentos | `05_hyperparameters` |
 | 4.6 Segunda campaña (20 h) | Configuración optimizada | `05_hyperparameters` |
 | 4.7 Validación y test (16 h) | Métricas sobre el split de test, tiempo de inferencia por lote, desglose por control de tiempo | pendiente |
-| 4.8 Transformer (36 h) | Arquitectura, entrenamiento con el mismo presupuesto, comparación | `06_train_transformer` |
+| 4.8 Transformer (36 h) | Arquitectura, entrenamiento con el mismo presupuesto, comparación | `06_train_transformer`, `07_transformer_tuning` |
 
 ### Resultados hasta acá
 
@@ -291,7 +291,8 @@ Sobre el split de test, que se toca una sola vez por campaña:
 | Piso: material lineal | 0,3973 | 0,339 | — | — | — |
 | ResNet campaña 1 | 0,2609 | 0,715 | 110,5 | 86,74 % | 0,8240 |
 | **ResNet campaña 2** (warm-up, 30 épocas) | **0,2511** | **0,736** | **105,8** | **87,80 %** | **0,8385** |
-| Transformer campaña 1 | pendiente | | | | |
+| Transformer campaña 1 | 0,2978 | 0,629 | 125,5 | 82,68 % | 0,7592 |
+| Transformer campaña 2 | pendiente | | | | |
 
 El barrido de la tarea 4.5 lo ganó el **calentamiento del learning rate**
 (0,2429 sobre validación contra 0,2607 del segundo), consistente con los picos
@@ -299,3 +300,49 @@ de validación que la campaña 1 mostró en las épocas 2, 4 y 10. La campaña 2
 confirmó esa configuración a 30 épocas y mejoró el test un 3,74 %, aunque las
 épocas 21 a 30 no aportaron nada: el mejor checkpoint es el de la época 21 y la
 razón de sobreajuste subió de 2,16 a 3,75. Ahí se cierra la ResNet.
+
+### El transformer subajusta (diagnóstico de la campaña 1)
+
+La primera campaña del transformer quedó 18,6 % por detrás de la ResNet, y la
+razón entre el error de validación al cuadrado y la pérdida de entrenamiento dice
+por qué:
+
+| época | transformer | ResNet campaña 2 |
+|---|---|---|
+| 10 | 1,01 | 1,29 |
+| 20 | 1,07 | 2,32 |
+| 30 | **1,19** | **3,75** |
+
+Una razón cercana a 1 significa que validación y entrenamiento dan prácticamente
+el mismo número: no hay nada memorizado y por lo tanto nada sobre-aprendido. **Al
+transformer no le sobra capacidad, le falta ajuste** — lo contrario del problema
+de la ResNet, y por lo tanto lo contrario de su solución.
+
+El dato que lo cierra: la pérdida de **entrenamiento** final del transformer
+(0,0759) es peor que el error de **validación** de la ResNet en su mejor época
+(0,0622). No consigue ajustar el conjunto de entrenamiento tan bien como la
+ResNet generaliza.
+
+La causa no fue la arquitectura sino la configuración con la que se la entrenó:
+`lr` 3e-4 (un tercio del de la ResNet) y `weight_decay` 1e-2 (cien veces el de la
+ResNet), elegidos como seguro contra la inestabilidad típica de los transformers.
+Treinta épocas monótonas y sin un solo pico muestran que ese seguro nunca hizo
+falta. **Es una lección metodológica que vale la pena registrar: importar la
+prudencia habitual de una familia de arquitecturas sin verificar que el problema
+exista se paga en capacidad, y el costo no se detecta mirando solo el RMSE.**
+
+El ajuste de la tarea 4.8 (notebook `07`) corre tres brazos contra ese
+diagnóstico —la receta exacta de la ResNet, lotes más chicos, y promedio en vez
+de token CLS—, los tres con recorte de gradiente, que es lo que vuelve razonable
+el salto de learning rate en una red sin batch normalization.
+
+### Una salvedad sobre "mismo presupuesto"
+
+Las dos arquitecturas están equiparadas en **parámetros** (2,74 M contra 2,91 M)
+y en **épocas**, que es lo que hace comparable la pregunta. No lo están en
+**cómputo**: el transformer tarda unos 12,4 minutos por época contra los 3,8 de
+la ResNet, 3,2 veces más GPU por el mismo recorrido de los datos. Las
+convoluciones de 3×3 sobre 8×8 caen en núcleos de cuDNN muy afinados, y una T4 no
+tiene los núcleos de atención que hacen competitivo a un transformer en hardware
+más nuevo. Si el transformer terminara ganando por poco, habría ganado pagando
+tres veces más cómputo, y eso es parte del resultado.

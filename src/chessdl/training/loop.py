@@ -16,6 +16,14 @@ still being paged in.
 After every epoch the model is scored on validation and the whole training state
 is pushed to the Hub. That cadence is the contract: a disconnect costs at most
 one epoch.
+
+``grad_clip`` is off by default, which is what the ResNet campaigns ran with:
+batch normalisation already bounds the activations, and the campaigns showed no
+sign of exploding gradients. It exists for the transformer, which has no batch
+norm and is the architecture where a single large step can undo an epoch. Its
+real purpose is not safety for its own sake but *permission*: clipping is what
+makes a learning rate high enough to actually fit the data a reasonable thing to
+try.
 """
 
 from __future__ import annotations
@@ -186,6 +194,7 @@ def train(
     weight_decay: float = 1e-4,
     loss_name: str = "mse",
     warmup_epochs: int = 0,
+    grad_clip: float | None = None,
     device: str | None = None,
     seed: int = 20260911,
     checkpoints: HubCheckpoints | None = None,
@@ -223,6 +232,7 @@ def train(
             "scheduler": ("LinearWarmup+CosineAnnealingLR" if warmup_epochs
                           else "CosineAnnealingLR"),
             "warmup_epochs": warmup_epochs,
+            "grad_clip": grad_clip,
             "amp": amp,
             "seed": seed,
             "train_positions": int(len(train_indices)),
@@ -266,6 +276,15 @@ def train(
             with torch.amp.autocast("cuda", enabled=amp):
                 loss = criterion(model(x), y)
             scaler.scale(loss).backward()
+            if grad_clip:
+                # Unscale first. Under AMP the gradients still carry the loss
+                # scale, so clipping them as they are would compare a scaled
+                # norm against an unscaled threshold and cut at an arbitrary
+                # -- and drifting -- point, since the scale adapts during
+                # training. `scaler.step` detects the unscaling already
+                # happened and does not repeat it.
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             scaler.step(optimizer)
             scaler.update()
 

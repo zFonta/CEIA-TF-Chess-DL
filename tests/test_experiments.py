@@ -18,6 +18,7 @@ from chessdl.models.resnet import ChessResNet, ResNetConfig  # noqa: E402
 from chessdl.training.cache import fen_to_cached  # noqa: E402
 from chessdl.training.experiments import (  # noqa: E402
     DEFAULT_SWEEP,
+    DEFAULT_TRANSFORMER_SWEEP,
     Experiment,
     SweepResult,
     run_sweep,
@@ -96,6 +97,58 @@ class TestExperimentOverrides:
     def test_every_arm_states_why_it_exists(self):
         for experiment in DEFAULT_SWEEP:
             assert experiment.rationale
+
+
+class TestTransformerSweep:
+    """The transformer's arms pull the opposite way to the ResNet's, on purpose.
+
+    Its first campaign underfitted -- validation error squared over training loss
+    was 1.19, against the ResNet's 3.75 -- so an arm that adds regularisation
+    would be pushing the wrong way, however well it worked for the ResNet.
+    """
+
+    def test_no_arm_adds_regularisation(self):
+        for experiment in DEFAULT_TRANSFORMER_SWEEP:
+            assert experiment.dropout == 0.0, f"{experiment.name} agrega dropout"
+            assert experiment.weight_decay is not None
+            assert experiment.weight_decay <= 1e-4, (
+                f"{experiment.name}: weight decay {experiment.weight_decay} contra un "
+                "modelo que subajusta"
+            )
+
+    def test_every_arm_raises_the_learning_rate_of_the_first_campaign(self):
+        """The first campaign ran at 3e-4, a third of the ResNet's."""
+        for experiment in DEFAULT_TRANSFORMER_SWEEP:
+            assert experiment.learning_rate > 3e-4
+
+    def test_every_arm_clips_the_gradient(self):
+        """What makes the higher rate safe on a network without batch norm."""
+        for experiment in DEFAULT_TRANSFORMER_SWEEP:
+            assert experiment.overrides()["grad_clip"] == 1.0
+
+    def test_the_arms_differ_in_technique_and_not_only_in_learning_rate(self):
+        """The point of three arms is three levers, not three values of one."""
+        rates = {e.learning_rate for e in DEFAULT_TRANSFORMER_SWEEP}
+        assert len(rates) == 1, "los brazos solo varian el learning rate"
+
+        changes = set()
+        for experiment in DEFAULT_TRANSFORMER_SWEEP:
+            if experiment.batch_size is not None:
+                changes.add("batch")
+            if experiment.architecture:
+                changes.add("arquitectura")
+        assert changes == {"batch", "arquitectura"}
+
+    def test_the_architecture_arm_reaches_the_model(self):
+        from chessdl.models.transformer import ChessTransformer, TransformerConfig
+
+        arm = next(e for e in DEFAULT_TRANSFORMER_SWEEP if e.architecture)
+        config = arm.model_config(TransformerConfig(d_model=32, layers=1, heads=4))
+        assert config.pooling == "mean"
+        assert ChessTransformer(config).cls_token is None
+
+    def test_grad_clip_is_not_mistaken_for_an_architecture_field(self):
+        assert "grad_clip" not in DEFAULT_TRANSFORMER_SWEEP[0].architecture
 
 
 class TestWarmupScheduler:
