@@ -9,6 +9,8 @@ does.
 
 from __future__ import annotations
 
+import json
+
 import chess
 import numpy as np
 import pytest
@@ -228,6 +230,61 @@ class TestHistory:
                 EpochRecord(epoch, 0.1, rmse, 0.2, 90.0, 0.8, 0.7, 10.0, 1e-3)
             )
         assert "mejor epoca: 2" in history.table()
+
+
+class TestBaselinesAreAlwaysNumbers:
+    """The floors are arithmetic, and the failure lands after the GPU is spent.
+
+    `material_baseline` returns a `BaselineScore`, and passing it straight
+    through instead of its `.rmse` did not fail anywhere it could be noticed:
+    `asdict` expanded it into a nested dict, so the history serialised, every
+    epoch was written, and the only thing that raised was the `summary()` printed
+    after the last one -- six hours in, and after the results were already safe.
+    """
+
+    def _record(self, rmse: float) -> EpochRecord:
+        return EpochRecord(1, 0.1, rmse, 0.2, 90.0, 0.8, 0.7, 10.0, 1e-3)
+
+    def test_a_baseline_score_is_reduced_to_its_rmse(self):
+        from chessdl.training.baselines import BaselineScore
+
+        history = TrainingHistory(
+            run_name="t",
+            baselines={"material": BaselineScore("material (lineal)", 0.3973, 0.3052)},
+        )
+        assert history.baselines["material"] == pytest.approx(0.3973)
+
+    def test_a_history_written_with_the_old_shape_still_loads(self):
+        """The transformer's first campaign is published this way; it has to read back."""
+        raw = json.dumps(
+            {
+                "run_name": "transformer-campana1",
+                "model": {},
+                "hyperparameters": {},
+                "baselines": {
+                    "material": {"name": "material (lineal)", "rmse": 0.3973, "mae": 0.3052}
+                },
+                "epochs": [],
+            }
+        )
+        assert TrainingHistory.from_json(raw).baselines["material"] == pytest.approx(0.3973)
+
+    def test_the_summary_reports_the_improvement_over_the_floor(self):
+        from chessdl.training.baselines import BaselineScore
+        from chessdl.training.loop import TrainingRun
+
+        history = TrainingHistory(
+            run_name="t",
+            baselines={"material": BaselineScore("material (lineal)", 0.4, 0.3)},
+        )
+        history.epochs.append(self._record(0.3))
+        summary = TrainingRun(history=history, best=history.best(), final_epoch=1).summary()
+        assert "mejora 25.0%" in summary
+
+    def test_something_that_is_not_a_score_raises_immediately(self):
+        """Immediately: before the run, not in the line that prints its result."""
+        with pytest.raises(TypeError, match="piso"):
+            TrainingHistory(run_name="t", baselines={"material": "0.3973"})
 
 
 class TestResumeIsExact:

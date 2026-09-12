@@ -31,6 +31,7 @@ import numpy as np
 
 from ..models.resnet import ChessResNet, ResNetConfig
 from ..models.transformer import TransformerConfig
+from .baselines import rmse_map
 from .checkpoint import HubCheckpoints
 from .loop import TrainingRun, seed_everything, train
 
@@ -127,6 +128,9 @@ class SweepResult:
     experiments: dict[str, Experiment] = field(default_factory=dict)
     baselines: dict[str, float] = field(default_factory=dict)
     reference: float | None = None
+
+    def __post_init__(self) -> None:
+        self.baselines = rmse_map(self.baselines)
 
     def best_name(self) -> str | None:
         scored = {

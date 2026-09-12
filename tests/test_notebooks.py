@@ -91,3 +91,23 @@ def test_shell_cells_use_the_kernel_interpreter(notebook: Path):
     """
     for source in code_sources(notebook):
         assert "!python " not in source
+
+
+def test_the_baseline_floors_are_extracted_as_numbers(notebook: Path):
+    """`material_baseline` returns a `BaselineScore`, and the floors must be floats.
+
+    Passing the object through instead cost a six-hour training run its closing
+    summary: `asdict` expanded it into a nested dict rather than failing, so the
+    campaign trained and checkpointed correctly and only the final `summary()`
+    raised -- after the GPU time was already spent. The library now coerces, but
+    the notebooks are copied from one another by hand, so the line itself is
+    pinned here: this is a transcription error, and transcription errors are
+    caught by comparing against the original, not by reading the code again.
+    """
+    for source in code_sources(notebook):
+        for line in source.splitlines():
+            if line.strip().startswith("pisos = "):
+                assert line.count(".rmse") == 2, (
+                    f"{notebook.name}: los pisos tienen que ser floats "
+                    f"(media.rmse / material.rmse), no BaselineScore -- {line.strip()}"
+                )

@@ -19,8 +19,9 @@ the numbers sit in the same table.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -37,6 +38,43 @@ class BaselineScore:
 
     def __str__(self) -> str:
         return f"{self.name:<28}RMSE {self.rmse:.4f}   MAE {self.mae:.4f}"
+
+
+def rmse_map(baselines: Mapping[str, Any] | None) -> dict[str, float]:
+    """Normalise a mapping of baselines to plain floats, whatever shape it arrives in.
+
+    Everything downstream does arithmetic on these numbers -- ``summary()``
+    computes the improvement over the material floor, the sweep table ranks
+    against it -- so they have to be floats. They arrive in three shapes:
+
+    * a float, which is what the notebooks pass (``material.rmse``);
+    * a :class:`BaselineScore`, which is what :func:`material_baseline` returns
+      and is the easy thing to pass by mistake;
+    * a dict with an ``rmse`` key, which is what a ``BaselineScore`` turns into
+      once a history has been through ``asdict`` and back.
+
+    That third case is the one that made this function necessary. A
+    ``BaselineScore`` passed to ``train`` did not fail: ``asdict`` expanded it
+    into a nested dict, so the history serialised happily and every epoch was
+    written correctly. The only thing that broke was the summary printed *after*
+    the last epoch -- six hours of GPU in, and after the results were already
+    safe. Accepting all three shapes here costs nothing and turns that into a
+    non-event; anything else still raises, immediately.
+    """
+    out: dict[str, float] = {}
+    for name, value in (baselines or {}).items():
+        if isinstance(value, BaselineScore):
+            out[name] = float(value.rmse)
+        elif isinstance(value, Mapping) and "rmse" in value:
+            out[name] = float(value["rmse"])
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            out[name] = float(value)
+        else:
+            raise TypeError(
+                f"el piso {name!r} es {type(value).__name__}; se esperaba un float, "
+                f"un BaselineScore o un dict con clave 'rmse'"
+            )
+    return out
 
 
 def rmse(predicted: np.ndarray, actual: np.ndarray) -> float:

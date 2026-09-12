@@ -28,6 +28,7 @@ import numpy as np
 import torch
 
 from .. import hf
+from .baselines import rmse_map
 
 LAST_NAME = "checkpoint_last.pt"
 BEST_NAME = "checkpoint_best.pt"
@@ -58,6 +59,14 @@ class TrainingHistory:
     hyperparameters: dict[str, Any] = field(default_factory=dict)
     baselines: dict[str, float] = field(default_factory=dict)
     epochs: list[EpochRecord] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # Every path that builds a history goes through here -- `train`, the
+        # sweep, and `from_json` reading a history back off the Hub -- so this is
+        # the one place where the baselines can be pinned to floats. It also
+        # repairs histories written before this existed, whose baselines were
+        # serialised as nested dicts.
+        self.baselines = rmse_map(self.baselines)
 
     def best(self) -> EpochRecord | None:
         return min(self.epochs, key=lambda e: e.val_rmse, default=None)
