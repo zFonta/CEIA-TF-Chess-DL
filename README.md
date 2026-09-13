@@ -16,18 +16,19 @@ esa evaluación, y el motor que las usa para elegir jugadas.
 |---|---|
 | 3. Pipeline de datos | **Completo** — dataset generado y publicado |
 | 4. Red neuronal | **Completo** — ResNet y transformer entrenados y comparados |
-| 5. Motor de juego | **Código completo, corrida pendiente** — búsqueda negamax y CLI |
-| 6. Evaluación del sistema | **Código completo, corrida pendiente** — torneos y ACPL |
+| 5. Motor de juego | **Completo** — búsqueda negamax, CLI y tiempos medidos |
+| 6. Evaluación del sistema | **Completo** — pérdida en centipeones y partidas contra Stockfish |
 
-Los bloques 3 y 4 están **corridos**: sus números salen de las notebooks
-versionadas con su salida. Los bloques 5 y 6 tienen el código y sus tests, pero
-la notebook `08` todavía no se ejecutó, así que este README no reporta resultados
-de juego — cuando los haya, van acá.
+Todos los bloques están **corridos**: los números de este README salen de las
+notebooks versionadas con su salida.
 
-Requerimientos del plan cubiertos: **1.1, 1.2, 1.3, 1.4, 2.2, 2.3, 3.1, 3.2,
-4.2, 5.1, 6.1**. El **1.6** (selección por búsqueda de un nivel) está
-implementado y testeado; el **1.7** (5 segundos por jugada) y lo que restaba de
-la **4.7** se cierran con las mediciones de la notebook `08`.
+Requerimientos del plan cubiertos: **1.1 a 1.4, 1.6, 1.7, 2.2, 2.3, 3.1, 3.2,
+4.2, 5.1, 5.2 y 6.1**.
+
+El **1.7** (5 segundos por jugada) quedó medido y no estimado: **10 ms** en el
+percentil 90 de partidas reales sobre Colab T4 con búsqueda de un nivel, y
+**285 ms** con dos. El número depende del hardware, así que va siempre con él al
+lado.
 
 ### El dataset generado
 
@@ -79,6 +80,32 @@ el dataset, no cómo se lee el tablero.**
 
 El razonamiento completo, los diagnósticos de sobre y subajuste y lo que se
 probó en cada campaña están en [`docs/modelado.md`](docs/modelado.md).
+
+### El motor jugando
+
+El RMSE mide cuánto se parece la red a Stockfish; la **pérdida media en
+centipeones** mide cuánto juega. Sobre 400 posiciones de test, comparando cada
+jugada elegida contra la mejor según Stockfish a profundidad 12:
+
+| motor | ACPL | acuerdo con SF | errores > 300 cp | ms/jugada (p90) |
+|---|---|---|---|---|
+| ResNet, 1 ply | 176,8 ± 14,4 | 30,5 % | 21,0 % | 10 |
+| Transformer, 1 ply | 257,1 ± 18,6 | 28,5 % | 34,2 % | 11 |
+| **ResNet, 2 plies** | **87,4 ± 11,2** | **39,0 %** | **5,5 %** | 285 |
+| **Transformer, 2 plies** | **97,9 ± 10,7** | **37,8 %** | **8,0 %** | 447 |
+
+**Un ply más parte la pérdida al medio y reduce los errores graves a un cuarto**,
+y sigue 18 veces por debajo del presupuesto del requerimiento 1.7. Es el ply que
+cierra el punto ciego de la recaptura: a un nivel el árbol termina en la jugada
+propia y la respuesta del rival no está en él.
+
+Y la comparación entre arquitecturas **se da vuelta con la profundidad**: a 1 ply
+la ResNet le saca 80,3 ± 23,5 cp —una diferencia clara, que el empate del 0,80 %
+en RMSE no anticipaba—, y a 2 plies la brecha cae a 10,5 ± 15,5, dentro del error.
+La búsqueda rescata los errores locales de la red más ruidosa, así que *"cuál
+arquitectura es mejor"* depende de cuánta búsqueda haya encima.
+
+Profundidad 3 **no entra** en el presupuesto: 9,7 s en el percentil 90 sobre T4.
 
 ## Qué hace el pipeline
 

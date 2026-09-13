@@ -474,6 +474,84 @@ millones de parámetros. Acá hay 573 mil partidas y 2,7 M de parámetros — tr
 exactamente lo que la literatura de visión predice para el mismo régimen de
 datos, y es un resultado, no una limitación del experimento.
 
+### Lo que dijeron las partidas (bloque 6)
+
+El RMSE mide cuánto se parece la red a Stockfish. La **pérdida media en
+centipeones** —cuánto tira cada jugada elegida contra la mejor, según Stockfish a
+profundidad 12 sobre 400 posiciones de test— mide cuánto juega. No dan lo mismo,
+y la diferencia es el resultado del bloque.
+
+| motor | ACPL | mediana | acuerdo con SF | errores > 300 cp |
+|---|---|---|---|---|
+| ResNet, 1 ply | 176,8 ± 14,4 | 52 | 30,5 % | 21,0 % |
+| Transformer, 1 ply | 257,1 ± 18,6 | 84 | 28,5 % | 34,2 % |
+| **ResNet, 2 plies** | **87,4 ± 11,2** | **25** | **39,0 %** | **5,5 %** |
+| **Transformer, 2 plies** | **97,9 ± 10,7** | **25** | **37,8 %** | **8,0 %** |
+
+**Un ply más parte la pérdida al medio y reduce los errores graves a un cuarto.**
+Era la predicción —profundidad 2 cierra el punto ciego de la recaptura— y se
+cumplió con holgura. Cuesta 285 ms por jugada contra los 8 ms de un ply, que
+igual queda 18 veces por debajo del presupuesto del requerimiento 1.7.
+
+#### La comparación entre arquitecturas se da vuelta con la profundidad
+
+| profundidad | diferencia de ACPL | ¿se distinguen? |
+|---|---|---|
+| 1 ply | **80,3 ± 23,5** a favor de la ResNet | Sí, con claridad |
+| 2 plies | 10,5 ± 15,5 a favor de la ResNet | No, dentro del error |
+
+**Es el resultado más interesante del bloque.** Con un ply la búsqueda no corrige
+nada y manda la evaluación cruda: ahí la ResNet le saca ventaja clara, y el
+empate del 0,80 % en RMSE resulta ser un mal predictor. Con dos plies la brecha
+se vuelve indistinguible: la búsqueda rescata los errores locales de la red más
+ruidosa.
+
+O sea que *"cuál arquitectura es mejor"* no tiene una respuesta sola — depende de
+cuánta búsqueda haya encima. El RMSE predijo bien el caso con búsqueda y mal el
+caso sin ella, y eso es una advertencia sobre la métrica, no sólo sobre los
+modelos.
+
+#### Profundidad 3: no entra
+
+La predicción de que entraría en GPU **estaba equivocada**. Medido en T4:
+
+| profundidad | hojas | mediana | p90 | margen vs 5 s |
+|---|---|---|---|---|
+| 1 | 29 | 8 ms | 10 ms | 483× |
+| 2 | 1.015 | 214 ms | 285 ms | 18× |
+| 3 | 32.688 | 4.124 ms | **9.653 ms** | **no entra** |
+
+Había estimado ~1,8 s a partir del rendimiento por lote; el real es 4,1 s de
+mediana y 9,7 s en el percentil 90. El error fue extrapolar desde el rendimiento
+con lotes de 2.048 —20.247 pos/s— a un régimen que nunca ve lotes así: el árbol
+se evalúa en tandas, pero el sobrecosto por nodo y el recorrido en Python no
+escalan como la multiplicación de matrices. En el transformer es peor todavía
+(19,3 s en el p90), coherente con que su rendimiento por lote grande es 3,5 veces
+menor que el de la ResNet.
+
+#### Fuerza de juego
+
+Contra Stockfish con la fuerza acotada por `UCI_Elo`, 30 partidas por escalón,
+cada apertura jugada dos veces con los colores cambiados.
+
+> **Número pendiente de la segunda corrida.** La primera midió la escalera con el
+> motor a **1 ply** y con Stockfish limitado por profundidad, y las dos cosas se
+> corrigieron:
+>
+> - El Elo de Stockfish está calibrado para búsquedas **con control de tiempo**.
+>   Fijarle la profundidad a mano pisa el mecanismo con el que se debilita: el
+>   rival juega debilitado, pero su Elo no es el de la etiqueta. Para la memoria
+>   eso es peor que no tener el número, así que pasó a un límite de tiempo.
+> - La escalera corría a 1 ply mientras la tabla de arriba mostraba que 2 plies
+>   parten la pérdida al medio. Sobre el escalón de 1.500, la ResNet pasó de
+>   **0,125 a 0,500 puntos por partida** al agregar un ply: del orden de 300
+>   puntos de Elo, sobre 12 partidas por brazo, así que es indicativo y no una
+>   medición. La escalera ahora corre a 2 plies.
+
+Y una salvedad que se mantiene con cualquier corrección: **30 partidas por
+escalón dejan un error de ±0,05 en la tasa de puntos**, que en Elo son decenas de
+puntos. La escalera ubica al motor en una franja, no en un número.
+
 ### Qué queda como trabajo futuro
 
 En orden de costo creciente, y todas dirigidas a la misma limitación:
