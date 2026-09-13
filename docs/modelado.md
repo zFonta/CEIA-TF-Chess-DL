@@ -506,6 +506,15 @@ tiene los núcleos de atención que hacen competitivo a un transformer en hardwa
 más nuevo.
 
 Eso matiza el empate en una dirección concreta: **a igualdad de RMSE, la ResNet
-lo consigue con un tercio del cómputo.** Para el bloque 5, donde lo que importa
-es el tiempo por jugada, esa diferencia no es un detalle contable — es el
-criterio que decide cuál de los dos modelos conviene poner en el motor.
+lo consigue con un tercio del cómputo de entrenamiento.**
+
+> **Cuidado con trasladar ese 3,2× al motor.** Es una medición de
+> *entrenamiento*: GPU, lotes de 512 a 1.024, propagación hacia atrás incluida.
+> El motor trabaja en el régimen opuesto —CPU, un lote de unas 33 posiciones, sin
+> gradientes— y ahí la diferencia casi desaparece: **86,7 ms contra 99,9 ms** de
+> mediana por jugada, un 15 %.
+>
+> Así que el costo **no** decide qué modelo va en el motor, como se afirmó acá
+> antes de medirlo. Las dos arquitecturas entran holgadas en el requerimiento 1.7
+> —unas 50 veces por debajo de los 5 segundos— y la elección queda librada a la
+> fuerza de juego, que es lo que mide el bloque 6.

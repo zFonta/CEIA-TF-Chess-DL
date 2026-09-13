@@ -32,6 +32,7 @@ dev = ["pytest>=8.0", "torch>=2.2"]
 [project.scripts]
 chessdl-build-dataset = "chessdl.scripts.build_dataset:main"
 chessdl-validate-dataset = "chessdl.scripts.validate_dataset:main"
+chessdl-play = "chessdl.scripts.play:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
