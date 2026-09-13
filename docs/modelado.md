@@ -12,8 +12,8 @@ diferencias.
 |---|---|
 | Pesos de la red en formato estándar (`.pt`) | Repositorio de modelos en Hugging Face |
 | Registro del experimento (hiperparámetros, curvas, métricas) | Mismo repositorio, junto a cada checkpoint |
-| Diagrama de la arquitectura de la red | `docs/` — se genera al cerrar 4.2 y 4.8 |
-| Métricas sobre validación y test | Informe de 4.7 |
+| Diagrama de la arquitectura de la red | [Más abajo en este documento](#diagramas-de-las-arquitecturas), una por arquitectura |
+| Métricas sobre validación y test | Tabla de resultados de este documento; **falta el desglose de 4.7** |
 
 ## Las dos arquitecturas
 
@@ -77,6 +77,66 @@ el tamaño. Se arranca con presupuestos equiparados:
 
 Ambas se entrenan además con el mismo presupuesto de épocas y el mismo
 optimizador antes de cualquier ajuste específico.
+
+## Diagramas de las arquitecturas
+
+Entregable del plan. Los dos diagramas describen las redes tal como quedaron
+implementadas en `src/chessdl/models/`, con las configuraciones que produjeron
+los resultados publicados.
+
+### ResNet — 2.913.345 parámetros
+
+```mermaid
+flowchart TD
+    A["entrada<br/>(18, 8, 8)"] --> B["stem<br/>Conv 3×3 → 128 canales<br/>BatchNorm + ReLU"]
+    B --> C["8 × bloque residual<br/>(el tablero sigue en 8×8)"]
+    C --> D["cabeza de valor<br/>Conv 1×1 → 32 canales<br/>BatchNorm + ReLU"]
+    D --> E["aplanado<br/>32 × 8 × 8 = 2048"]
+    E --> F["Linear 2048 → 256<br/>ReLU"]
+    F --> G["Linear 256 → 1"]
+    G --> H["tanh<br/>salida en [−1, 1]"]
+
+    C -.-> C1["cada bloque:<br/>Conv 3×3 → BN → ReLU<br/>Conv 3×3 → BN<br/>+ atajo, luego ReLU"]
+```
+
+Las convoluciones son de 3×3 con relleno 1, así que el tablero **nunca se
+reduce**: entra en 8×8 y llega en 8×8 a la cabeza. Es la diferencia central con
+una ResNet de visión, cuyo stem de 7×7 con stride 2 más max-pooling dejaría el
+tablero en 2×2 en dos pasos.
+
+La convolución 1×1 de la cabeza existe para recortar el ancho antes del
+aplanado: sin ella, aplanar 128 canales daría 8192 entradas y la capa densa
+sola se llevaría dos millones de parámetros.
+
+### Transformer — 2.735.361 parámetros
+
+```mermaid
+flowchart TD
+    A["entrada<br/>(18, 8, 8)"] --> B["64 tokens, uno por casilla<br/>(64, 18)"]
+    B --> C["proyección Linear 18 → 192"]
+    C --> D["+ embeddings posicionales<br/>aprendidos (64, 192)"]
+    D --> E["+ token CLS<br/>(65, 192)"]
+    E --> F["6 × capa de encoder<br/>pre-norm, 8 cabezas<br/>feed-forward 768, GELU"]
+    F --> G["LayerNorm final"]
+    G --> H["pooling<br/>se toma el token CLS"]
+    H --> I["Linear 192 → 256<br/>GELU"]
+    I --> J["Linear 256 → 1"]
+    J --> K["tanh<br/>salida en [−1, 1]"]
+```
+
+Los embeddings posicionales son **aprendidos, no sinusoidales**: un tablero no
+es una secuencia, y la distancia entre a1 y a2 no es comparable con la que hay
+entre a1 y b1 de ninguna forma que capture una sinusoide. Son 64 posiciones
+fijas y cada una recibe su propio vector.
+
+El pre-norm (`norm_first`) no es cosmético: los transformers post-norm son
+difíciles de arrancar desde cero sin un calentamiento largo, y el presupuesto
+acá es una sesión de Colab.
+
+Las dos redes terminan en `tanh`, así que el rango que pide el requerimiento 1.4
+está **garantizado por construcción** y no aprendido — vale desde la primera
+inicialización al azar y no puede derivar. Es además la misma operación que
+generó las etiquetas (`value = tanh(cp / 400)`).
 
 ## Decisiones ya tomadas
 
@@ -203,6 +263,7 @@ Tres detalles del runtime que importan más que el modelo de GPU:
 
 - **Lotes grandes** (1.024 a 4.096). Con 8×8 de resolución, un lote chico deja la
   GPU haciendo nada entre kernels. Es la palanca más efectiva de las tres.
+  **Corregido por la evidencia, ver abajo.**
 - **Precisión mixta (AMP)**. La T4 tiene tensor cores; usar `float16` en el
   forward es prácticamente gratis en código y cambia bastante el tiempo.
 - **RAM estándar alcanza.** El caché de tensores son 2,9 GB en `uint8` contra los
@@ -210,6 +271,24 @@ Tres detalles del runtime que importan más que el modelo de GPU:
 
 No se usa **TPU**: PyTorch sobre XLA agrega complejidad de compilación y de
 depuración que no se justifica para un modelo de este tamaño.
+
+> **Corrección sobre el tamaño de lote.** Lo anterior se escribió antes de
+> entrenar, y el barrido del transformer lo contradice por partida doble.
+>
+> En **calidad**, el lote de 512 le ganó al de 1.024 (validación 0,2635 contra
+> 0,2725): con un modelo que subajusta, lo que importa no es el tiempo por época
+> sino cuántas actualizaciones entran en ella, y partir el lote las duplica.
+>
+> En **velocidad**, que era el argumento original, tampoco se cumplió: las épocas
+> con lote 512 tardaron **658 s contra 736 s** del lote 1.024, un 11 % *menos*.
+> La atención sobre 65 tokens con lotes grandes genera matrices que presionan el
+> ancho de banda de memoria, así que agrandar el lote dejó de pagar antes de lo
+> previsto. Con la salvedad de que Colab pudo haber asignado GPUs distintas entre
+> una campaña y otra, no es una medición controlada.
+>
+> La conclusión que sí se sostiene es la de la ResNet, que es donde se estimó: el
+> argumento de la utilización vale para convoluciones sobre 8×8, no se traslada
+> automáticamente a la atención.
 
 Si durante el ajuste de hiperparámetros (4.5) hiciera falta iterar más rápido, el
 escalón sensato es **L4**, no A100.
@@ -292,7 +371,12 @@ Sobre el split de test, que se toca una sola vez por campaña:
 | ResNet campaña 1 | 0,2609 | 0,715 | 110,5 | 86,74 % | 0,8240 |
 | **ResNet campaña 2** (warm-up, 30 épocas) | **0,2511** | **0,736** | **105,8** | **87,80 %** | **0,8385** |
 | Transformer campaña 1 | 0,2978 | 0,629 | 125,5 | 82,68 % | 0,7592 |
-| Transformer campaña 2 | pendiente | | | | |
+| **Transformer campaña 2** (lotes de 512, 30 épocas) | **0,2531** | **0,732** | **109,0** | **86,80 %** | **0,8315** |
+
+**El resultado del bloque es un empate: 0,2531 contra 0,2511, un 0,80 %.** Sobre
+una sola semilla esa diferencia no es una diferencia; para sostener que una
+arquitectura gana habría que medir la variación entre semillas de la misma
+configuración, que muy probablemente sea del mismo orden.
 
 El barrido de la tarea 4.5 lo ganó el **calentamiento del learning rate**
 (0,2429 sobre validación contra 0,2607 del segundo), consistente con los picos
@@ -331,10 +415,85 @@ falta. **Es una lección metodológica que vale la pena registrar: importar la
 prudencia habitual de una familia de arquitecturas sin verificar que el problema
 exista se paga en capacidad, y el costo no se detecta mirando solo el RMSE.**
 
-El ajuste de la tarea 4.8 (notebook `07`) corre tres brazos contra ese
+El ajuste de la tarea 4.8 (notebook `07`) corrió tres brazos contra ese
 diagnóstico —la receta exacta de la ResNet, lotes más chicos, y promedio en vez
 de token CLS—, los tres con recorte de gradiente, que es lo que vuelve razonable
 el salto de learning rate en una red sin batch normalization.
+
+### El ajuste, y adónde se movió el problema
+
+Ganó **`lotes-chicos`** (validación 0,2635 contra 0,2725 del control y 0,2807 del
+pooling promedio), y la campaña final a 30 épocas cerró en **0,2531** sobre test:
+15 % mejor que la campaña 1, y a 0,80 % de la ResNet.
+
+Que ganara el brazo de lotes chicos confirma el diagnóstico desde otro ángulo.
+Los tres compartían learning rate, weight decay y dropout; el que ganó es el que
+hizo **el doble de pasos de optimización por época** (67.320 contra 33.660). Al
+modelo no le faltaba regularización ni capacidad: le faltaban actualizaciones.
+
+Pero el diagnóstico **se dio vuelta** con el ajuste:
+
+| época | pérdida de entrenamiento | validación | razón |
+|---|---|---|---|
+| 18 | 0,05522 | **0,2524** | 1,15 ← mejor |
+| 22 | 0,04660 | 0,2533 | 1,38 |
+| 26 | 0,03968 | 0,2572 | 1,67 |
+| 30 | 0,03664 | 0,2594 | 1,84 |
+
+De la época 18 a la 30 la pérdida de entrenamiento cayó 34 % y la validación
+empeoró 2,8 %. El transformer ya no subajusta: encuentra su mejor punto y a
+partir de ahí memoriza, igual que la ResNet.
+
+Hay una advertencia práctica acá, sobre cómo leer esta razón. En la época 18 vale
+1,15, y el umbral que se usó en la campaña 1 para diagnosticar subajuste era
+"menor que 1,4". Aplicado mecánicamente diría "seguí empujando", y sería
+incorrecto: la validación ya dio la vuelta. **La razón hay que leerla junto con
+la dirección de la curva de validación, nunca sola.**
+
+### El resultado del bloque: el techo lo pone el dataset
+
+| | mejor época | validación después |
+|---|---|---|
+| ResNet campaña 2 | 21 de 30 | +1,80 % |
+| Transformer campaña 2 | 18 de 30 | +2,77 % |
+
+Dos arquitecturas con priors opuestos —la convolución trae la localidad de
+fábrica, la atención tiene que aprenderla desde 573 mil partidas— llegan al mismo
+número, con la misma forma de curva, y empiezan a memorizar en el mismo punto
+relativo del presupuesto. **Esa coincidencia es la firma de un problema limitado
+por datos, no por arquitectura.**
+
+Un detalle fino lo refuerza: el transformer nunca ajusta el entrenamiento tan
+bien como la ResNet (0,0366 contra 0,0172 en la época 30) y sin embargo llega
+casi a la misma validación. Memoriza menos y generaliza igual.
+
+Para calibrar la escala: el trabajo de referencia que entrena transformers de
+ajedrez sin búsqueda usa del orden de 10 millones de partidas y cientos de
+millones de parámetros. Acá hay 573 mil partidas y 2,7 M de parámetros — tres
+órdenes de magnitud menos. Que la convolución no pierda a esta escala es
+exactamente lo que la literatura de visión predice para el mismo régimen de
+datos, y es un resultado, no una limitación del experimento.
+
+### Qué queda como trabajo futuro
+
+En orden de costo creciente, y todas dirigidas a la misma limitación:
+
+1. **Aumentación por espejo horizontal.** Una posición reflejada en columnas es
+   estratégicamente idéntica —todos los movimientos de peón son verticales y el
+   al paso se refleja bien— **salvo por el enroque**: la columna e se refleja en
+   la d, así que el rey de e1 iría a d1 y la geometría se rompe. Vale entonces
+   solo para posiciones sin derechos de enroque de ningún lado, que se detectan
+   directamente sobre el caché mirando si los planos 12 a 15 son todos cero.
+   Costo de cómputo prácticamente nulo.
+2. **Sesgo posicional relativo en la atención.** Hoy el transformer tiene
+   embeddings absolutos y tiene que deducir de los datos que d4 y e4 son
+   adyacentes. Un sesgo aprendido indexado por la diferencia entre casillas
+   (Δcolumna, Δfila) le da esa geometría explícitamente por unos 10.800
+   parámetros, un 0,4 % del presupuesto.
+3. **Más posiciones.** Quedó sin usar el 53 % del extracto ya filtrado, así que
+   ampliar el dataset no requiere bajar otro dump de Lichess: solo seguir
+   etiquetando. Es la palanca que este bloque **demostró** que hace falta, en vez
+   de suponerla.
 
 ### Una salvedad sobre "mismo presupuesto"
 
@@ -344,5 +503,9 @@ y en **épocas**, que es lo que hace comparable la pregunta. No lo están en
 la ResNet, 3,2 veces más GPU por el mismo recorrido de los datos. Las
 convoluciones de 3×3 sobre 8×8 caen en núcleos de cuDNN muy afinados, y una T4 no
 tiene los núcleos de atención que hacen competitivo a un transformer en hardware
-más nuevo. Si el transformer terminara ganando por poco, habría ganado pagando
-tres veces más cómputo, y eso es parte del resultado.
+más nuevo.
+
+Eso matiza el empate en una dirección concreta: **a igualdad de RMSE, la ResNet
+lo consigue con un tercio del cómputo.** Para el bloque 5, donde lo que importa
+es el tiempo por jugada, esa diferencia no es un detalle contable — es el
+criterio que decide cuál de los dos modelos conviene poner en el motor.

@@ -7,19 +7,25 @@ Trabajo Final — Carrera de Especialización en Inteligencia Artificial (FIUBA)
 
 ## Estado del proyecto
 
-Este repositorio implementa el **bloque 3 del WBS: pipeline de datos**. Genera un
-dataset reproducible de pares *(posición, evaluación)* etiquetados con Stockfish,
-a partir de partidas públicas de Lichess.
+Este repositorio implementa los **bloques 3 y 4 del WBS**: el pipeline que genera
+un dataset reproducible de pares *(posición, evaluación)* etiquetados con
+Stockfish a partir de partidas públicas de Lichess, y las dos redes que aprenden
+a reproducir esa evaluación.
 
 | Bloque del WBS | Estado |
 |---|---|
 | 3. Pipeline de datos | **Completo — dataset generado y publicado** |
-| 4. Red neuronal | Pendiente |
+| 4. Red neuronal | **Completo salvo 4.7** — ResNet y transformer entrenados y comparados |
 | 5. Motor de juego | Pendiente |
 | 6. Evaluación del sistema | Pendiente |
 
-Requerimientos del plan cubiertos: **1.1, 1.2, 1.3, 2.2, 2.3, 3.2, 5.1**, y la
-transformación inversa que necesita el 4.2.
+De la tarea 4.7 falta el desglose de métricas por control de tiempo y el tiempo
+de inferencia por lote; este último es además la evidencia del requerimiento 1.7
+(5 segundos por jugada), que no se puede verificar hasta que exista el motor del
+bloque 5.
+
+Requerimientos del plan cubiertos: **1.1, 1.2, 1.3, 1.4, 2.2, 2.3, 3.1, 3.2,
+5.1, 6.1**, y la transformación inversa que necesita el 4.2.
 
 ### El dataset generado
 
@@ -39,8 +45,38 @@ etiquetado y limitaciones conocidas— está en
 [`docs/dataset_card.md`](docs/dataset_card.md); lo que costó generarlo y qué
 esperar al volver a correrlo, en [`docs/pipeline.md`](docs/pipeline.md).
 
-Las tres notebooks del repositorio están versionadas **con la salida de esa
-corrida**, así que los números se pueden auditar sin volver a ejecutar nada.
+Las notebooks del repositorio están versionadas **con la salida de sus corridas
+reales**, así que todos los números de este README se pueden auditar sin volver a
+ejecutar nada.
+
+### Los modelos entrenados
+
+Pesos, métricas e historiales en
+[`zFonta/ceia-chess-models`](https://huggingface.co/zFonta/ceia-chess-models).
+Todo sobre el split de **test**, que se toca una sola vez por campaña:
+
+| | test RMSE | R² | MAE (cp) | signo | ρ | parámetros |
+|---|---|---|---|---|---|---|
+| Piso: media constante | 0,4886 | 0,000 | — | — | — | — |
+| Piso: material lineal | 0,3973 | 0,339 | — | — | — | — |
+| ResNet campaña 1 | 0,2609 | 0,715 | 110,5 | 86,74 % | 0,8240 | 2.913.345 |
+| **ResNet campaña 2** | **0,2511** | **0,736** | **105,8** | **87,80 %** | **0,8385** | 2.913.345 |
+| Transformer campaña 1 | 0,2978 | 0,629 | 125,5 | 82,68 % | 0,7592 | 2.735.361 |
+| **Transformer campaña 2** | **0,2531** | **0,732** | **109,0** | **86,80 %** | **0,8315** | 2.735.361 |
+
+**Las dos arquitecturas empatan.** Con presupuestos de parámetros equiparados, la
+diferencia final es del 0,80 % — menos de lo que se esperaría entre dos semillas
+de la misma configuración. Las dos mejoran el piso de material un 36 %, y las dos
+alcanzan su mejor época a los dos tercios del presupuesto y empiezan a memorizar
+después.
+
+Que dos arquitecturas con priors tan distintos —la convolución trae la localidad
+de fábrica, la atención tiene que aprenderla— lleguen al mismo número y con la
+misma forma de curva es el resultado principal del bloque 4: **el techo lo pone
+el dataset, no cómo se lee el tablero.**
+
+El razonamiento completo, los diagnósticos de sobre y subajuste y lo que se
+probó en cada campaña están en [`docs/modelado.md`](docs/modelado.md).
 
 ## Qué hace el pipeline
 
@@ -64,26 +100,43 @@ Shards Parquet ──► Hugging Face Datasets
 Detalle completo en [`docs/pipeline.md`](docs/pipeline.md); las decisiones de
 diseño y los parámetros exactos, en [`docs/dataset_card.md`](docs/dataset_card.md).
 
-## Reproducir el dataset (requerimiento 2.2)
+## Reproducir el trabajo (requerimiento 2.2)
 
 El entorno de ejecución del proyecto es **Google Colab Pro**, y las notebooks son
-el punto de entrada. Se ejecutan en orden:
+el punto de entrada. Se ejecutan en orden.
+
+### Bloque 3 — pipeline de datos · **runtime de CPU**
 
 | Notebook | Para qué |
 |---|---|
-| `notebooks/00_survey_dumps.ipynb` | Medir cuántas partidas pasan el filtro **antes** de gastar cómputo |
-| `notebooks/01_build_dataset.ipynb` | Construir el dataset (reanudable) y subirlo a Hugging Face |
-| `notebooks/02_dataset_eda.ipynb` | Análisis exploratorio, verificación del espejado y de la transformación inversa (WBS 3.5) |
+| `00_survey_dumps.ipynb` | Medir cuántas partidas pasan el filtro **antes** de gastar cómputo |
+| `01_build_dataset.ipynb` | Construir el dataset (reanudable) y subirlo a Hugging Face |
+| `02_dataset_eda.ipynb` | Análisis exploratorio, verificación del espejado y de la transformación inversa (WBS 3.5) |
+
+> **Acá conviene CPU, no GPU.** El etiquetado con Stockfish es puro CPU y los
+> runtimes con GPU de Colab traen *menos* vCPUs: elegir GPU es más lento y además
+> consume cuota que conviene reservar para el entrenamiento.
+
+### Bloque 4 — redes · **runtime de GPU (T4)**
+
+| Notebook | Para qué |
+|---|---|
+| `03_train_resnet.ipynb` | Entorno de entrenamiento y arquitectura residual (WBS 4.1 y 4.2) |
+| `04_train_campaign.ipynb` | Función de pérdida y primera campaña de la ResNet (4.3 y 4.4) |
+| `05_hyperparameters.ipynb` | Barrido de 5 brazos y segunda campaña de la ResNet (4.5 y 4.6) |
+| `06_train_transformer.ipynb` | Arquitectura transformer y su primera campaña (4.8) |
+| `07_transformer_tuning.ipynb` | Barrido de 3 brazos y campaña final del transformer (4.8) |
+
+Las notebooks del bloque 4 **no dependen de volver a correr las del bloque 3**:
+bajan el dataset ya publicado del Hub. Y cada campaña es reanudable —el estado
+completo de entrenamiento se sube al Hub después de cada época—, así que una
+desconexión de Colab cuesta una época, no la campaña.
 
 Todo el código del proyecto se ejecuta desde las notebooks: los módulos se
 importan directamente, los tests corren en una celda `!{sys.executable} -m pytest`,
 y los dos comandos de línea de comando tienen su celda equivalente. La única
 excepción es `tests/fixtures/make_fixture.py`, una herramienta de desarrollo que
 regenera el PGN de prueba y solo se corre si se quiere cambiar su contenido.
-
-> **Usar un runtime de CPU, no de GPU.** El etiquetado con Stockfish es puro CPU
-> y los runtimes con GPU de Colab traen *menos* vCPUs: elegir GPU es más lento
-> acá y además consume cuota que conviene reservar para el entrenamiento.
 
 ### Ejecución local
 
@@ -139,9 +192,11 @@ se puede continuar desde cualquier máquina.
 
 | Qué | Dónde |
 |---|---|
-| Shards etiquetados | `zFonta/ceia-chess-eval` — el entregable |
+| Shards etiquetados | `zFonta/ceia-chess-eval` — el entregable del bloque 3 |
+| Pesos, métricas e historiales | `zFonta/ceia-chess-models` — el entregable del bloque 4 |
 | Extracto PGN filtrado | `zFonta/ceia-chess-work` |
 | Estado de reanudación | `zFonta/ceia-chess-work` |
+| Caché de tensores | local, descartable — se reconstruye desde los FEN |
 | Cache de trabajo | local, descartable |
 
 La deduplicación no se almacena: se reconstruye leyendo la columna `pos_key` de
@@ -166,6 +221,43 @@ from chessdl.encoding import board_to_tensor   # (18, 8, 8) float32
 
 tensor = board_to_tensor(chess.Board(tabla["fen"][0].as_py()))
 ```
+
+## Evaluar una posición con un modelo entrenado
+
+```python
+import chess, torch
+from chessdl import hf
+from chessdl.encoding import board_to_tensor
+from chessdl.models.resnet import ChessResNet, ResNetConfig
+from chessdl.normalize import value_to_cp
+from chessdl.training.checkpoint import BEST_NAME, HubCheckpoints, load_checkpoint
+
+checkpoints = HubCheckpoints(
+    repo_id="zFonta/ceia-chess-models",
+    run_name="campana2-warmup",          # la mejor ResNet
+    local_dir="./checkpoints",
+    token=hf.get_token(),
+)
+modelo = ChessResNet(ResNetConfig(channels=128, blocks=8))
+load_checkpoint(checkpoints.fetch(BEST_NAME), modelo)
+modelo.eval()
+
+tablero = chess.Board()
+entrada = torch.from_numpy(board_to_tensor(tablero)).unsqueeze(0)
+with torch.no_grad():
+    value_stm = float(modelo(entrada))
+
+# La red predice en perspectiva del jugador al turno (requerimiento 1.4 sobre
+# `value_stm`); el cambio de signo la lleva a perspectiva de las blancas.
+value_white = value_stm if tablero.turn == chess.WHITE else -value_stm
+print(f"{value_white:+.4f}  ({value_to_cp(value_white):+.0f} centipeones)")
+```
+
+Para el transformer, cambiar `ChessResNet`/`ResNetConfig` por
+`ChessTransformer`/`TransformerConfig` y el `run_name` por
+`transformer-campana2-lotes-chicos`. Las dos arquitecturas exponen la misma
+interfaz —entrada `(batch, 18, 8, 8)`, salida `(batch,)` en [−1, 1]—, así que el
+resto del código no cambia.
 
 ## Decisión de diseño central: perspectiva del jugador al turno
 
@@ -193,8 +285,8 @@ src/chessdl/
 ├── normalize.py       # cp ↔ [-1,1], directa e inversa
 ├── viz.py             # estilo de figuras para el análisis y la memoria
 ├── colab.py           # entorno Colab: secretos y chequeo de runtime
-├── hf.py              # subida/bajada de shards a Hugging Face
-├── data/
+├── hf.py              # subida/bajada a Hugging Face (datasets y modelos)
+├── data/                       # bloque 3
 │   ├── lichess.py     # streaming de los dumps, extracción filtrada
 │   ├── pgn.py         # parseo de cabeceras y filtro de partidas
 │   ├── sampling.py    # muestreo de posiciones balanceado por turno
@@ -203,6 +295,19 @@ src/chessdl/
 │   ├── state.py       # estado de reanudación y deduplicación
 │   ├── pipeline.py    # orquestación de punta a punta
 │   └── validate.py    # chequeos de integridad
+├── models/                     # bloque 4: las arquitecturas
+│   ├── resnet.py      # ResNet estilo AlphaZero, 3x3 sin reducir el tablero
+│   └── transformer.py # encoder sobre 64 tokens, uno por casilla
+├── training/                   # bloque 4: cómo se entrenan
+│   ├── split.py       # partición POR PARTIDA, con hash estable
+│   ├── cache.py       # caché uint8 de tensores (2,9 GB en vez de 11,8)
+│   ├── dataset.py     # Dataset de PyTorch sobre el caché
+│   ├── baselines.py   # pisos de media y de material
+│   ├── loss.py        # MSE y Huber
+│   ├── metrics.py     # RMSE, MAE en cp, acuerdo de signo, Spearman
+│   ├── loop.py        # entrenamiento reanudable, con calentamiento y recorte
+│   ├── checkpoint.py  # estado completo al Hub después de cada época
+│   └── experiments.py # barridos de hiperparámetros de las dos arquitecturas
 └── scripts/           # interfaces de línea de comando
 ```
 
@@ -212,7 +317,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 204 tests, ~30 segundos
+pytest -q                          # los 407 tests, ~40 segundos
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos
@@ -230,23 +335,36 @@ requerimientos de testing (3.1 y 3.2) para la memoria. Para que `pytest` esté
 disponible hay que instalar con el extra `dev` (`pip install -e ".[dev]"`), que
 es lo que hace la celda de entorno de las notebooks.
 
-Los tests corren sin red. Los que necesitan Stockfish se saltean solos si no está
-instalado; el resto usa el fixture PGN versionado en `tests/fixtures/`.
+Los tests corren sin red y sin GPU. Los que necesitan Stockfish se saltean solos
+si no está instalado, y los de entrenamiento si no está el extra `train`; el
+resto usa el fixture PGN versionado en `tests/fixtures/`.
 
 Lo que cubren, en orden de importancia:
 
 - **`test_encoding.py`** — el espejado del tablero: invarianza, derechos de
   enroque, captura al paso, promoción, y que la codificación de un board vivo
   coincida con la de su FEN.
+- **`test_split.py`** — que la partición sea **por partida** y no por posición.
+  Es la decisión metodológica más importante del bloque 4: hacerla mal infla la
+  validación y no se detecta hasta que el motor juega peor que sus métricas.
 - **`test_pipeline.py`** — la construcción completa contra el fixture con
   Stockfish real, incluida la reanudación tras una interrupción.
+- **`test_training_loop.py`** — que una corrida reanudada llegue al mismo lugar
+  que una ininterrumpida: no alcanza con recargar los pesos, tienen que volver
+  el optimizador, el schedule, el escalador de precisión mixta y el orden de
+  barajado de cada época.
 - **`test_dataset_integrity.py`** — que cada chequeo del requerimiento 3.2 falle
   cuando se le inyecta el problema que dice detectar.
-- **`test_notebooks.py`** — que las celdas de entorno de las tres notebooks no se
+- **`test_resnet.py`** y **`test_transformer.py`** — los modos de falla que no
+  dan error: una red que corre pero no aprende, un tensor de tokens que perdió
+  la casilla, embeddings posicionales inertes.
+- **`test_notebooks.py`** — que las celdas de entorno de las notebooks no se
   desincronicen. Cubre las fallas que ya costaron una sesión de Colab: instalar
   sin el extra `dev`, no poner `src/` en `sys.path`, tapar un `git pull` fallido
   con `check=False`, o llamar a `!python` en vez de `!{sys.executable}`.
-- **`test_normalize.py`**, **`test_sampling.py`**, **`test_pgn_filter.py`**.
+- **`test_normalize.py`**, **`test_metrics.py`**, **`test_baselines.py`**,
+  **`test_training_cache.py`**, **`test_experiments.py`**,
+  **`test_sampling.py`**, **`test_pgn_filter.py`**.
 
 ## Fuente de datos y licencia
 

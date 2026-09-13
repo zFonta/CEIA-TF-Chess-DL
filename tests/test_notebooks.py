@@ -76,6 +76,37 @@ def test_environment_cell_does_not_hide_a_failed_pull(notebook: Path):
     assert 'check=False' not in source
 
 
+def markdown_sources(path: Path) -> list[str]:
+    notebook = json.loads(path.read_text(encoding="utf-8"))
+    return [
+        "".join(cell["source"])
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "markdown"
+    ]
+
+
+def test_every_notebook_but_the_last_points_at_the_next_one(notebook: Path):
+    """The set is meant to be read in order, and each one says where to go next.
+
+    Only the last is exempt, because there is nothing honest to point at until
+    the next block exists. That exemption is by position, not by name, so adding
+    a notebook makes this fail on the one that used to be last -- which is the
+    moment to give it a pointer.
+    """
+    if notebook == notebook_paths()[-1]:
+        pytest.skip("la ultima no tiene siguiente todavia")
+
+    siguiente = notebook_paths()[notebook_paths().index(notebook) + 1]
+    texto = "\n".join(markdown_sources(notebook))
+
+    assert "Proximo paso" in texto or "Próximo paso" in texto, (
+        f"{notebook.name} no dice cual sigue"
+    )
+    assert siguiente.name in texto, (
+        f"{notebook.name} apunta a otra cosa y no a {siguiente.name}"
+    )
+
+
 def test_notebooks_do_not_use_google_drive(notebook: Path):
     """Everything durable lives on the Hub; nothing should mount a drive."""
     for source in code_sources(notebook):
