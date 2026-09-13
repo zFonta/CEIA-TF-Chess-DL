@@ -70,7 +70,7 @@ def cargar_evaluador(args) -> Evaluator:
 
 
 def analizar(board: chess.Board, evaluador: Evaluator, top: int, rng) -> None:
-    resultado = search(board, evaluador, rng)
+    resultado = search(board, evaluador, rng=rng)
     blancas = value_white(board, resultado.value)
 
     print(board)
@@ -93,7 +93,7 @@ def auto_partida(board: chess.Board, evaluador: Evaluator, jugadas: int, rng) ->
 
     for _ in range(jugadas):
         try:
-            resultado = search(board, evaluador, rng)
+            resultado = search(board, evaluador, rng=rng)
         except GameOverError:
             break
         tiempos.append(resultado.seconds)
