@@ -7,25 +7,27 @@ Trabajo Final — Carrera de Especialización en Inteligencia Artificial (FIUBA)
 
 ## Estado del proyecto
 
-Este repositorio implementa los **bloques 3 y 4 del WBS**: el pipeline que genera
-un dataset reproducible de pares *(posición, evaluación)* etiquetados con
-Stockfish a partir de partidas públicas de Lichess, y las dos redes que aprenden
-a reproducir esa evaluación.
+Este repositorio implementa el trabajo completo: el pipeline que genera un
+dataset reproducible de pares *(posición, evaluación)* etiquetados con Stockfish
+a partir de partidas públicas de Lichess, las dos redes que aprenden a reproducir
+esa evaluación, y el motor que las usa para elegir jugadas.
 
 | Bloque del WBS | Estado |
 |---|---|
-| 3. Pipeline de datos | **Completo — dataset generado y publicado** |
-| 4. Red neuronal | **Completo salvo 4.7** — ResNet y transformer entrenados y comparados |
-| 5. Motor de juego | Pendiente |
-| 6. Evaluación del sistema | Pendiente |
+| 3. Pipeline de datos | **Completo** — dataset generado y publicado |
+| 4. Red neuronal | **Completo** — ResNet y transformer entrenados y comparados |
+| 5. Motor de juego | **Código completo, corrida pendiente** — búsqueda negamax y CLI |
+| 6. Evaluación del sistema | **Código completo, corrida pendiente** — torneos y ACPL |
 
-De la tarea 4.7 falta el desglose de métricas por control de tiempo y el tiempo
-de inferencia por lote; este último es además la evidencia del requerimiento 1.7
-(5 segundos por jugada), que no se puede verificar hasta que exista el motor del
-bloque 5.
+Los bloques 3 y 4 están **corridos**: sus números salen de las notebooks
+versionadas con su salida. Los bloques 5 y 6 tienen el código y sus tests, pero
+la notebook `08` todavía no se ejecutó, así que este README no reporta resultados
+de juego — cuando los haya, van acá.
 
 Requerimientos del plan cubiertos: **1.1, 1.2, 1.3, 1.4, 2.2, 2.3, 3.1, 3.2,
-5.1, 6.1**, y la transformación inversa que necesita el 4.2.
+4.2, 5.1, 6.1**. El **1.6** (selección por búsqueda de un nivel) está
+implementado y testeado; el **1.7** (5 segundos por jugada) y lo que restaba de
+la **4.7** se cierran con las mediciones de la notebook `08`.
 
 ### El dataset generado
 
@@ -126,6 +128,7 @@ el punto de entrada. Se ejecutan en orden.
 | `05_hyperparameters.ipynb` | Barrido de 5 brazos y segunda campaña de la ResNet (4.5 y 4.6) |
 | `06_train_transformer.ipynb` | Arquitectura transformer y su primera campaña (4.8) |
 | `07_transformer_tuning.ipynb` | Barrido de 3 brazos y campaña final del transformer (4.8) |
+| `08_motor_y_partidas.ipynb` | El motor, el tiempo por jugada y las partidas contra Stockfish (bloques 5 y 6) |
 
 Las notebooks del bloque 4 **no dependen de volver a correr las del bloque 3**:
 bajan el dataset ya publicado del Hub. Y cada campaña es reanudable —el estado
@@ -169,6 +172,19 @@ Validar la integridad (requerimiento 3.2):
 ```bash
 python -m chessdl.scripts.validate_dataset --shards-dir <dir> --stats
 ```
+
+Jugar o analizar con el motor (requerimientos 1.6, 1.7 y 4.2):
+
+```bash
+# Analizar una posicion: la jugada elegida y las alternativas, en centipeones
+python -m chessdl.scripts.play --run-name campana2-warmup --fen "<FEN>"
+
+# Una partida del motor contra si mismo, con el tiempo por jugada medido
+python -m chessdl.scripts.play --run-name campana2-warmup --self-play 40
+```
+
+Sin `--run-name` ni `--checkpoint` el comando **se niega a jugar**: una red sin
+entrenar devuelve jugadas legales y parecería estar funcionando.
 
 ### Configuración
 
@@ -298,6 +314,11 @@ src/chessdl/
 ├── models/                     # bloque 4: las arquitecturas
 │   ├── resnet.py      # ResNet estilo AlphaZero, 3x3 sin reducir el tablero
 │   └── transformer.py # encoder sobre 64 tokens, uno por casilla
+├── engine/                     # bloques 5 y 6: el motor
+│   ├── evaluator.py   # evalúa lotes de posiciones; terminales desde las reglas
+│   ├── search.py      # negamax a profundidad N sobre la evaluación
+│   ├── loader.py      # reconstruye el modelo desde el model_config del checkpoint
+│   └── match.py       # partidas contra Stockfish, Elo y pérdida en centipeones
 ├── training/                   # bloque 4: cómo se entrenan
 │   ├── split.py       # partición POR PARTIDA, con hash estable
 │   ├── cache.py       # caché uint8 de tensores (2,9 GB en vez de 11,8)
@@ -317,7 +338,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 407 tests, ~40 segundos
+pytest -q                          # los 477 tests, ~45 segundos
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos

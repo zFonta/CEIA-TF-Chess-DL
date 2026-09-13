@@ -90,8 +90,32 @@ class Evaluator:
         self.terminal_calls = 0
 
     @torch.no_grad()
+    def evaluate_tensors(self, planes: Sequence[np.ndarray]) -> np.ndarray:
+        """Run the network over already-encoded positions, in batches.
+
+        The raw path, with no rules applied: whatever is passed here reaches the
+        network. Callers that start from boards should use :meth:`evaluate`,
+        which resolves decided positions first; the search uses this one because
+        it resolves them itself, and with the distance to mate that a search
+        needs and a position on its own has no way to know.
+        """
+        if not planes:
+            return np.empty(0, dtype=np.float32)
+
+        values = np.empty(len(planes), dtype=np.float32)
+        for start in range(0, len(planes), self.batch_size):
+            corte = slice(start, start + self.batch_size)
+            batch = torch.from_numpy(np.stack(planes[corte]))
+            values[corte] = self.model(batch.to(self.device)).float().cpu().numpy()
+            self.network_calls += len(values[corte])
+        return values
+
     def evaluate(self, boards: Sequence[chess.Board]) -> np.ndarray:
-        """Score every position, from each one's own side-to-move perspective."""
+        """Score every position, from each one's own side-to-move perspective.
+
+        Decided positions are answered from the rules and never reach the
+        network.
+        """
         values = np.empty(len(boards), dtype=np.float32)
 
         rows: list[int] = []
@@ -105,12 +129,8 @@ class Evaluator:
                 values[index] = decided
                 self.terminal_calls += 1
 
-        for start in range(0, len(rows), self.batch_size):
-            corte = slice(start, start + self.batch_size)
-            batch = torch.from_numpy(np.stack(planes[corte]))
-            values[rows[corte]] = self.model(batch.to(self.device)).float().cpu().numpy()
-            self.network_calls += len(rows[corte])
-
+        if rows:
+            values[rows] = self.evaluate_tensors(planes)
         return values
 
     def evaluate_board(self, board: chess.Board) -> float:

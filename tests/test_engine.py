@@ -187,7 +187,7 @@ class TestItPlaysChess:
         for _ in range(24):
             if board.is_game_over():
                 break
-            elegida = best_move(board, evaluador, rng)
+            elegida = best_move(board, evaluador, rng=rng)
             assert elegida in board.legal_moves
             board.push(elegida)
 
@@ -225,6 +225,139 @@ class TestWhatOnePlyCannotDo:
         board.push(elegida)
         # Y el rey la recupera en la jugada siguiente, que la busqueda no miro.
         assert any(m.to_square == chess.D8 for m in board.legal_moves)
+
+
+class TestDepthTwoClosesTheBlindSpot:
+    """The point of searching deeper, stated as the thing that changes.
+
+    At depth one the tree ends on the engine's own move, so a recapture is
+    outside it entirely. Depth two ends after the opponent's reply, which is
+    exactly that blind spot -- and the same position that proves the limitation
+    above proves the fix here.
+    """
+
+    def test_it_stops_giving_away_the_queen(self, evaluador):
+        board = tablero(
+            (chess.E1, chess.KING, chess.WHITE),
+            (chess.D1, chess.QUEEN, chess.WHITE),
+            (chess.E8, chess.KING, chess.BLACK),
+            (chess.D8, chess.ROOK, chess.BLACK),
+        )
+        assert best_move(board, evaluador, depth=1).to_square == chess.D8
+        assert best_move(board, evaluador, depth=2).to_square != chess.D8
+
+    def test_the_deeper_value_of_the_same_move_accounts_for_the_reply(self, evaluador):
+        """Followed on the capture itself, which is where the change happens.
+
+        Comparing the *chosen* move across depths would not show it: at depth two
+        the engine simply plays something else. What proves the reply is now in
+        the tree is that the value assigned to Qxd8 drops -- at one ply it reads
+        as winning a rook, at two the king takes back and what is left is king
+        against king, a draw.
+        """
+        board = tablero(
+            (chess.E1, chess.KING, chess.WHITE),
+            (chess.D1, chess.QUEEN, chess.WHITE),
+            (chess.E8, chess.KING, chess.BLACK),
+            (chess.D8, chess.ROOK, chess.BLACK),
+        )
+        captura = chess.Move(chess.D1, chess.D8)
+
+        def valor_de(profundidad: int) -> float:
+            resultado = search(board, evaluador, depth=profundidad)
+            return next(v for m, v in resultado.ranked if m == captura)
+
+        assert valor_de(1) > 0, "a un ply, Dxd8 se lee como ganar una torre"
+        assert valor_de(2) == pytest.approx(0.0), "a dos, Rxd8 deja rey contra rey"
+        assert valor_de(2) < valor_de(1)
+
+
+class TestMateDistance:
+    """A mate has to be worth more the sooner it arrives.
+
+    Score every mate the same and an engine that has found one has no reason to
+    play the move that delivers it now over one that merely keeps it available.
+    That is how an engine "sees" mate for fifty moves and never gets there -- and
+    it only becomes possible once the search is deep enough to see mates that are
+    not immediate.
+    """
+
+    def test_a_faster_mate_outranks_a_slower_one(self, evaluador):
+        """Mate in one is available; the search must not settle for mate in two."""
+        board = tablero(
+            (chess.H8, chess.KING, chess.BLACK),
+            (chess.G6, chess.QUEEN, chess.WHITE),
+            (chess.F6, chess.KING, chess.WHITE),
+        )
+        resultado = search(board, evaluador, depth=3)
+
+        board.push(resultado.move)
+        assert board.is_checkmate(), "habiendo mate en 1, eligio otra cosa"
+
+    def test_a_mate_outranks_anything_the_network_can_say(self, evaluador):
+        """`tanh` keeps the network inside (-1, 1); mates live outside it."""
+        board = tablero(
+            (chess.H8, chess.KING, chess.BLACK),
+            (chess.G6, chess.QUEEN, chess.WHITE),
+            (chess.F6, chess.KING, chess.WHITE),
+            (chess.A1, chess.ROOK, chess.WHITE),
+        )
+        resultado = search(board, evaluador, depth=1)
+        assert resultado.value > 1.0
+        assert resultado.is_mate
+
+    def test_a_mate_reports_a_bounded_evaluation(self, evaluador):
+        """The internal score leaves [-1, 1]; what is reported must not."""
+        board = tablero(
+            (chess.H8, chess.KING, chess.BLACK),
+            (chess.G6, chess.QUEEN, chess.WHITE),
+            (chess.F6, chess.KING, chess.WHITE),
+        )
+        resultado = search(board, evaluador, depth=1)
+        assert resultado.centipawns == pytest.approx(2000, abs=1)
+
+
+class TestDepthMechanics:
+    def test_the_number_of_leaves_grows_by_the_branching_factor_per_ply(self, evaluador):
+        """This is the whole cost argument for searching deeper, so it is pinned.
+
+        The first two levels are exact: the start position has 20 legal moves and
+        every one of them leaves Black with 20. The third is **not** 20 cubed --
+        the branching factor is an average, not a constant -- so what is asserted
+        there is the order of magnitude, which is the part the decision rests on.
+        """
+        board = chess.Board()
+        assert search(board, evaluador, depth=1).leaves == 20
+        assert search(board, evaluador, depth=2).leaves == 400
+
+        tercera = search(board, evaluador, depth=3).leaves
+        assert 6_000 < tercera < 12_000, f"{tercera:,} hojas, fuera de lo esperado"
+
+    def test_the_board_survives_a_deep_search_untouched(self, evaluador):
+        """Thousands of push/pop pairs, and not one of them may leak."""
+        board = chess.Board("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+        antes, pila = board.fen(), len(board.move_stack)
+        search(board, evaluador, depth=3)
+        assert board.fen() == antes
+        assert len(board.move_stack) == pila
+
+    def test_a_depth_below_one_is_rejected(self, evaluador):
+        with pytest.raises(ValueError, match="profundidad"):
+            search(chess.Board(), evaluador, depth=0)
+
+    def test_the_beam_cuts_the_tree_and_keeps_a_legal_move(self, evaluador):
+        board = chess.Board()
+        completa = search(board, evaluador, depth=2)
+        podada = search(board, evaluador, depth=2, beam=5)
+
+        assert podada.leaves < completa.leaves
+        assert podada.move in board.legal_moves
+        assert len(podada.ranked) == 5
+
+    def test_the_beam_does_nothing_when_it_is_wider_than_the_position(self, evaluador):
+        board = chess.Board()
+        assert (search(board, evaluador, depth=2, beam=99).leaves
+                == search(board, evaluador, depth=2).leaves)
 
 
 class TestSignConvention:
