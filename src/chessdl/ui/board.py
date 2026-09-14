@@ -24,10 +24,11 @@ import html
 import traceback
 
 import chess
+import chess.engine
 
 from ..engine.evaluator import Evaluator
 from ..engine.search import mate_in
-from .game import Click, PlayState
+from .game import REFERENCE_DEPTH, Click, PlayState
 
 #: The two square colours, and the marks laid over them. Kept together because
 #: they only make sense as a set: every one of them has to stay legible under
@@ -46,6 +47,28 @@ CHECK = "#e0644f"
 #: Marks an empty square the selected piece may move to. The colour alone is
 #: readable, but a mark survives a colour-blind reader and a bad screen.
 DOT = "·"
+
+#: What an empty square carries as a label: a non-breaking space, never ``""``.
+#:
+#: This looks like a pointless flourish and is not. ``ButtonView.update`` in
+#: ipywidgets 7 -- the version Colab ships -- rewrites the button's text only
+#: when there is something to write::
+#:
+#:     if (description.length || icon.length) {
+#:         this.el.textContent = "";
+#:         ...
+#:         this.el.appendChild(document.createTextNode(description));
+#:     }
+#:
+#: With an empty description and no icon the whole block is skipped, so the
+#: label the button already had **stays in the DOM**. A piece that moves away
+#: never disappears from the square it left, and every move dot ever drawn stays
+#: drawn. The board slowly fills up with pieces that are not there.
+#:
+#: A single space has ``length == 1``, so the branch runs, the old glyph is
+#: cleared, and what gets written is invisible. ipywidgets 8 dropped the guard,
+#: which is why this never shows up outside Colab.
+EMPTY = " "
 
 #: Square size in pixels. Large enough to click on a laptop trackpad without
 #: making the board taller than a notebook cell.
@@ -86,25 +109,80 @@ def _needs_widgets():
     return ipywidgets
 
 
-def _bar(value_white: float, cp: float) -> str:
-    """The evaluation as a bar, from White's point of view.
+#: The accent that marks each source in the panel. The bar itself stays
+#: white-on-dark in both -- it means "how much of the position belongs to
+#: White", and recolouring that would turn a shared scale into two.
+NETWORK_INK = "#3f7fbf"
+REFERENCE_INK = "#8a6fbf"
+
+
+def _bar(reading, ink: str, name: str, note: str) -> str:
+    """One evaluation, as a labelled bar, from White's point of view.
 
     Drawn from ``value`` and not from centipawns on purpose: the network's output
     is already bounded, so the bar is linear in the quantity the model actually
     produces, and a won position cannot push the bar off the end. The centipawn
     figure is printed next to it because that is the unit people read.
+
+    Stockfish's reading goes through the *same* ``tanh(cp/400)`` the labels went
+    through before training, so the two bars are the same scale. Showing one in
+    centipawns and the other in [-1, 1] would make every position look like a
+    disagreement.
     """
-    acotado = max(-1.0, min(1.0, value_white))
+    acotado = max(-1.0, min(1.0, reading.value))
     blancas = (acotado + 1.0) / 2.0 * 100.0
-    signo = "+" if cp >= 0 else ""
+    if reading.is_mate:
+        lectura = f"mate en {abs(reading.mate)}"
+    else:
+        lectura = f"{acotado:+.3f} &nbsp; {'+' if reading.cp >= 0 else ''}{reading.cp:.0f} cp"
     return (
-        f'<div style="margin:6px 0 2px 0;">'
-        f'<div style="height:14px;width:100%;background:#3b3b3b;border:1px solid #888;">'
+        f'<div style="margin:8px 0 0 0;">'
+        f'<div style="font-size:12px;margin-bottom:2px;">'
+        f'<span style="display:inline-block;width:9px;height:9px;background:{ink};'
+        f'border-radius:2px;margin-right:6px;"></span>'
+        f"<b>{name}</b> <span style='color:#888;'>{note}</span></div>"
+        f'<div style="height:13px;width:100%;background:#3b3b3b;'
+        f'border:1px solid {ink};box-sizing:border-box;">'
         f'<div style="height:100%;width:{blancas:.1f}%;background:#f2f2f2;"></div>'
         f"</div>"
         f'<div style="font-family:monospace;font-size:12px;margin-top:2px;">'
-        f"valor {acotado:+.3f} &nbsp;&nbsp; {signo}{cp:.0f} cp &nbsp; "
-        f'<span style="color:#777;">(desde las blancas)</span></div></div>'
+        f"{lectura}</div></div>"
+    )
+
+
+def _gap(network, reference) -> str:
+    """The distance between the two readings, which is the interesting number.
+
+    It is one term of the error the memoir reports as an average: the network's
+    test RMSE of 0,2511 is the root mean of exactly this, over the test split.
+    Seeing it on the position in front of you is what turns that figure from a
+    number in a table into something with a size.
+
+    A mate is left out rather than turned into a difference: Stockfish pins it
+    to the clip bound and the network has never seen one, so subtracting them
+    would produce a large number that measures the clipping, not the model.
+    """
+    if reference is None:
+        return ""
+    if reference.is_mate:
+        return (
+            '<div style="font-size:12px;color:#888;padding-top:4px;">'
+            "Stockfish ve un mate forzado, que queda fuera de la escala de la "
+            "red: el dataset no tiene posiciones asi.</div>"
+        )
+    diferencia = abs(network.value - reference.value)
+    if diferencia < 0.10:
+        juicio, color = "coinciden", "#2e7d32"
+    elif diferencia < 0.30:
+        juicio, color = "se parecen", "#946200"
+    else:
+        juicio, color = "no coinciden", "#b03a2e"
+    return (
+        f'<div style="font-size:12px;padding-top:6px;">'
+        f"Diferencia: <code>{diferencia:.3f}</code> "
+        f'<span style="color:{color};">({juicio})</span> '
+        f'<span style="color:#888;">&nbsp;el RMSE de test de la red es 0,251</span>'
+        f"</div>"
     )
 
 
@@ -125,13 +203,15 @@ class PlayUI:
         human_color: chess.Color = chess.WHITE,
         fen: str | None = None,
         positions: dict[str, str] | None = None,
+        reference: "chess.engine.SimpleEngine | None" = None,
+        reference_depth: int = REFERENCE_DEPTH,
     ) -> None:
         self.widgets = _needs_widgets()
         self.positions = dict(positions or {})
         if isinstance(evaluators, dict):
             self.evaluators = dict(evaluators)
         else:
-            self.evaluators = {"motor": evaluators}
+            self.evaluators = {"Red": evaluators}
         primero = next(iter(self.evaluators))
 
         self.state = PlayState(
@@ -139,6 +219,8 @@ class PlayUI:
             human_color=human_color,
             depth=depth,
             board=chess.Board(fen) if fen else chess.Board(),
+            reference=reference,
+            reference_depth=reference_depth,
         )
         self._build()
         self._refresh()
@@ -153,7 +235,7 @@ class PlayUI:
         self.squares: dict[int, "w.Button"] = {}
         for square in chess.SQUARES:
             boton = w.Button(
-                description="",
+                description=EMPTY,
                 layout=w.Layout(
                     width=f"{SQUARE_PX}px", height=f"{SQUARE_PX}px",
                     margin="0px", padding="0px",
@@ -333,6 +415,10 @@ class PlayUI:
 
     def _on_model(self, change) -> None:
         self.state.evaluator = self.evaluators[change["new"]]
+        # The cached readings belong to the model that is being replaced, and a
+        # panel showing one architecture's evaluation under the other's name
+        # would be worse than showing none.
+        self.state.invalidate_readings()
         self.state.last_search = None
         self._refresh()
 
@@ -434,7 +520,7 @@ class PlayUI:
             pieza = self.state.board.piece_at(square)
             clara = (chess.square_rank(square) + chess.square_file(square)) % 2 == 1
             boton = self.squares[square]
-            glifo = chess.UNICODE_PIECE_SYMBOLS[pieza.symbol()] if pieza else ""
+            glifo = chess.UNICODE_PIECE_SYMBOLS[pieza.symbol()] if pieza else EMPTY
 
             if square == rey_en_jaque:
                 color = CHECK
@@ -464,11 +550,28 @@ class PlayUI:
         self._render_panel()
 
     def _render_panel(self) -> None:
-        valor, cp = self.state.evaluation()
+        red, referencia = self.state.readings()
         partes = [
             f'<div style="padding:2px 0;"><b>{self.state.status()}</b></div>',
-            _bar(valor, cp),
+            _bar(red, NETWORK_INK, self.model_picker.value, "(la red entrenada)"),
         ]
+        if referencia is not None:
+            partes.append(_bar(
+                referencia, REFERENCE_INK, "Stockfish",
+                f"(profundidad {self.state.reference_depth}, la del dataset)",
+            ))
+            partes.append(_gap(red, referencia))
+        else:
+            partes.append(
+                '<div style="font-size:12px;color:#888;padding-top:4px;">'
+                "Sin Stockfish: no hay con que comparar. Pasale un motor en "
+                "<code>reference=</code> para ver las dos lecturas.</div>"
+            )
+        partes.append(
+            '<div style="font-size:11px;color:#888;padding-top:4px;">'
+            "Las dos desde las blancas y en la misma escala "
+            "<code>tanh(cp/400)</code>.</div>"
+        )
         if self.state.finished:
             partes.append(
                 f'<div style="color:#777;">Resultado: '

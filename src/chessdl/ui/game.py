@@ -22,10 +22,40 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 import chess
+import chess.engine
 
 from ..engine.evaluator import Evaluator
 from ..engine.search import GameOverError, SearchResult, search, value_white
-from ..normalize import value_to_cp
+from ..normalize import cp_to_value, score_to_cp, value_to_cp
+
+#: Search depth asked of the reference engine, when there is one.
+#:
+#: Twelve because that is the depth the dataset was labelled at: the network was
+#: trained to reproduce *this* reading of a position, so this is the number its
+#: output should be compared against. A deeper reference would be a better chess
+#: player and a worse yardstick -- the gap would then mix the model's error with
+#: the difference between two Stockfishes, and only the first is this project's.
+REFERENCE_DEPTH = 12
+
+
+@dataclass(frozen=True)
+class Reading:
+    """One evaluation of a position, from White's point of view.
+
+    Both the network and Stockfish end up here, in the same units, which is the
+    whole point: two numbers on different scales cannot be put side by side and
+    a reader would have no way to tell that they disagree.
+    """
+
+    value: float
+    cp: float
+    #: Signed distance to mate, when the source reports one. The network has no
+    #: way to say this -- it never saw a mate -- so it is always ``None`` there.
+    mate: int | None = None
+
+    @property
+    def is_mate(self) -> bool:
+        return self.mate is not None
 
 
 class Click(str, Enum):
@@ -64,6 +94,11 @@ class PlayState:
     depth: int = 2
     board: chess.Board = field(default_factory=chess.Board)
 
+    #: Stockfish, to read the same position next to the network. Optional: the
+    #: board works without one, it just has nothing to compare against.
+    reference: chess.engine.SimpleEngine | None = None
+    reference_depth: int = REFERENCE_DEPTH
+
     #: The square the person picked up, while they hold it.
     selected: int | None = None
     #: A promotion waiting on a choice of piece, as ``(from_square, to_square)``.
@@ -79,6 +114,10 @@ class PlayState:
 
     def __post_init__(self) -> None:
         self.flipped = self.human_color == chess.BLACK
+        #: Readings already taken, by FEN. Selecting and deselecting a piece
+        #: redraws the panel without changing the position, and asking Stockfish
+        #: again for an answer it already gave would put a search on the click.
+        self._cache: dict[str, tuple[Reading, Reading | None]] = {}
 
     # ------------------------------------------------------------------ state
 
@@ -230,16 +269,68 @@ class PlayState:
 
     # --------------------------------------------------------------- readings
 
-    def evaluation(self) -> tuple[float, float]:
-        """The current position as ``(value from White's side, centipawns)``.
+    def evaluation(self) -> Reading:
+        """What the network makes of the position, from White's point of view.
 
         White's point of view rather than the side to move's, because a bar that
         flips meaning every ply is unreadable -- and because requirement 1.4
         defines the reported value that way.
         """
+        return self.readings()[0]
+
+    def reference_evaluation(self) -> Reading | None:
+        """What Stockfish makes of it, or ``None`` if there is no engine."""
+        return self.readings()[1]
+
+    def readings(self) -> tuple[Reading, Reading | None]:
+        """Both evaluations of the current position, in the same units.
+
+        The pair is what makes the panel worth reading: on its own the network's
+        number is unfalsifiable, and next to the one it was trained to reproduce
+        it becomes a claim with an error attached. The difference between them,
+        on this position, is one term of the RMSE the memoir reports as an
+        average.
+        """
+        clave = self.board.fen()
+        if clave not in self._cache:
+            self._cache[clave] = (self._network_reading(), self._reference_reading())
+        return self._cache[clave]
+
+    def _network_reading(self) -> Reading:
         valor_stm = self.evaluator.evaluate_board(self.board)
         blancas = value_white(self.board, valor_stm)
-        return blancas, value_to_cp(max(-1.0, min(1.0, blancas)))
+        return Reading(value=blancas, cp=value_to_cp(max(-1.0, min(1.0, blancas))))
+
+    def _reference_reading(self) -> Reading | None:
+        """Ask Stockfish, and survive it not answering.
+
+        A dead engine subprocess must not take the board down with it: the
+        person is in the middle of a game, and losing the comparison is a far
+        smaller loss than losing the position. So the failure is reported by
+        returning ``None`` -- the panel then simply has one bar instead of two.
+        """
+        if self.reference is None:
+            return None
+        try:
+            info = self.reference.analyse(
+                self.board, chess.engine.Limit(depth=self.reference_depth)
+            )
+            cp, mate = score_to_cp(info["score"].pov(chess.WHITE))
+        except (chess.engine.EngineError, chess.engine.EngineTerminatedError, OSError):
+            self.reference = None          # do not retry on every redraw
+            return None
+        return Reading(value=cp_to_value(cp), cp=float(cp), mate=mate)
+
+    def invalidate_readings(self) -> None:
+        """Drop the cached evaluations.
+
+        Needed when the *reader* changes rather than the position: swapping the
+        network for the other architecture leaves every cached number belonging
+        to a model that is no longer the one on the board, and a panel showing
+        one model's evaluation under the other one's name is worse than showing
+        nothing.
+        """
+        self._cache.clear()
 
     def status(self) -> str:
         """One line on how the game stands, in the language of the notebooks."""

@@ -307,18 +307,32 @@ resto del código no cambia.
 
 La notebook [`09_jugar_contra_el_motor.ipynb`](notebooks/09_jugar_contra_el_motor.ipynb)
 levanta un tablero clickeable —click en la pieza, click en el casillero— contra
-cualquiera de las dos redes, y muestra mientras tanto la evaluación de la
-posición y las cinco jugadas que el motor rankeó más alto, con su valor.
+cualquiera de las dos redes, y muestra mientras tanto las cinco jugadas que el
+motor rankeó más alto con su valor, y **dos evaluaciones de la posición: la de
+la red y la de Stockfish**, en la misma escala y las dos desde las blancas.
 
 ```python
+import chess.engine
+
 from chessdl import hf
 from chessdl.engine.evaluator import Evaluator
 from chessdl.engine.loader import load_from_hub
 from chessdl.ui import PlayUI
 
 modelo = load_from_hub("zFonta/ceia-chess-models", "campana2-warmup", token=hf.get_token())
-PlayUI(Evaluator(modelo), depth=2)      # la última expresión de la celda lo dibuja
+PlayUI(                                 # la última expresión de la celda lo dibuja
+    Evaluator(modelo),
+    depth=2,
+    reference=chess.engine.SimpleEngine.popen_uci("stockfish"),   # opcional
+)
 ```
+
+La referencia corre a **profundidad 12, la que etiquetó el dataset**: es la
+lectura que la red fue entrenada para reproducir, así que la brecha entre las
+dos barras es el error del modelo y nada más. Una referencia más profunda sería
+mejor ajedrecista y peor vara. Esa brecha, sobre la posición que tenés delante,
+es un término del error que la memoria reporta promediado — el RMSE de test de
+0,2511 es la raíz de la media de exactamente eso.
 
 No agrega ninguna medición: las de la memoria salen de la notebook 08. Lo que
 agrega es poder **verificar a mano**, sobre posiciones elegidas por quien lee,
@@ -401,7 +415,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 539 tests, ~40 segundos
+pytest -q                          # los 550 tests, ~45 segundos
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos

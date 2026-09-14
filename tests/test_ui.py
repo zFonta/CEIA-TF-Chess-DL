@@ -282,15 +282,15 @@ class TestLecturas:
         negras = PlayState(
             evaluator=evaluator, board=chess.Board("4k3/8/8/8/8/8/8/3QK3 b - - 0 1")
         )
-        assert blancas.evaluation()[0] > 0
-        assert negras.evaluation()[0] > 0
+        assert blancas.evaluation().value > 0
+        assert negras.evaluation().value > 0
 
     def test_the_centipawn_reading_carries_the_same_sign(self, evaluator: Evaluator) -> None:
         estado = PlayState(
             evaluator=evaluator, board=chess.Board("3qk3/8/8/8/8/8/8/4K3 w - - 0 1")
         )
-        valor, cp = estado.evaluation()
-        assert valor < 0 and cp < 0
+        lectura = estado.evaluation()
+        assert lectura.value < 0 and lectura.cp < 0
 
     def test_the_move_list_pairs_white_and_black(self, partida: PlayState) -> None:
         jugar(partida, "e2", "e4")
@@ -377,6 +377,46 @@ class TestVista:
         vista._on_new()
         assert vista.errors.value == ""
 
+    def test_no_square_is_ever_labelled_with_an_empty_string(self, vista) -> None:
+        """An empty square carries a space, never ``""``, all the way through.
+
+        This is the one bug of the board that a person reported and no test
+        here could have caught by looking at the Python. `ButtonView.update` in
+        ipywidgets 7 -- Colab's version -- only rewrites the button's text when
+        the description or the icon is non-empty:
+
+            if (description.length || icon.length) { el.textContent = ""; ... }
+
+        So clearing a description to `""` leaves the previous label sitting in
+        the DOM. Pieces stayed on the squares they had left and every move dot
+        ever drawn stayed drawn, while the colours -- written by a separate,
+        unguarded call -- updated correctly, which is what made it look like a
+        refresh problem rather than a label one.
+
+        Nothing in Python observes that, and ipywidgets 8 dropped the guard, so
+        it cannot be reproduced here either. What *is* checkable is the
+        invariant that avoids it, and that is what this pins.
+        """
+        from chessdl.ui.board import EMPTY
+
+        def revisar(cuando: str) -> None:
+            vacias = [
+                chess.square_name(s) for s, b in vista.squares.items()
+                if not b.description
+            ]
+            assert not vacias, f"{cuando}: descripcion vacia en {vacias}"
+            assert EMPTY, "el relleno de casilla vacia no puede ser una cadena vacia"
+
+        revisar("al construir")
+        vista._on_square(chess.E2)()
+        revisar("con una pieza levantada")
+        vista._on_square(chess.E4)()
+        revisar("despues de jugar")
+        vista._on_undo()
+        revisar("despues de deshacer")
+        vista._on_flip()
+        revisar("con el tablero dado vuelta")
+
     def test_a_preset_loads_on_the_side_the_position_is_waiting_for(
         self, evaluator: Evaluator
     ) -> None:
@@ -393,11 +433,166 @@ class TestVista:
         assert vista.state.human_turn
         assert vista.errors.value == ""
 
+    def test_the_panel_names_the_source_of_each_evaluation(
+        self, evaluator: Evaluator, stockfish_path: str
+    ) -> None:
+        """Whose number is whose has to be readable off the panel itself.
+
+        This is what the board was missing: one unlabelled bar, and no way to
+        tell whether it was the model talking or the reference.
+        """
+        pytest.importorskip("ipywidgets", reason="requires the `ui` extra")
+        import chess.engine
+
+        from chessdl.ui import PlayUI
+
+        motor = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+        try:
+            vista = PlayUI(
+                {"ResNet": evaluator}, depth=1, reference=motor, reference_depth=8
+            )
+            panel = vista.status.value
+        finally:
+            motor.quit()
+
+        assert "ResNet" in panel
+        assert "Stockfish" in panel
+        assert "Diferencia" in panel
+        assert vista.errors.value == ""
+
+    def test_without_an_engine_the_panel_says_so_instead_of_guessing(
+        self, vista
+    ) -> None:
+        assert "Sin Stockfish" in vista.status.value
+        assert "Diferencia" not in vista.status.value
+
     def test_a_malformed_fen_is_reported_and_not_loaded(self, vista) -> None:
         vista.fen_field.value = "esto no es un FEN"
         vista._on_load()
         assert "no se puede leer" in vista.errors.value
         assert vista.state.board.fen() == chess.STARTING_FEN
+
+
+class TestLasDosLecturas:
+    """The network's evaluation next to the one it was trained to reproduce.
+
+    Two numbers side by side are only worth showing if they are in the same
+    units, and that is the whole risk here: Stockfish answers in centipawns and
+    from whichever side is to move, the network answers in [-1, 1] from White's.
+    Get either conversion wrong and the panel shows a disagreement on every
+    position -- which looks like a bad model rather than a bad panel.
+    """
+
+    @pytest.fixture
+    def stockfish(self, stockfish_path: str):
+        import chess.engine
+
+        motor = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+        yield motor
+        motor.quit()
+
+    def test_without_an_engine_there_is_simply_no_second_reading(
+        self, partida: PlayState
+    ) -> None:
+        assert partida.reference_evaluation() is None
+        assert partida.evaluation() is not None
+
+    def test_both_readings_agree_on_who_is_winning(self, evaluator, stockfish) -> None:
+        # White a queen up. Any sign convention error shows up here, because the
+        # right answer does not depend on the model being any good.
+        estado = PlayState(
+            evaluator=evaluator,
+            board=chess.Board("4k3/8/8/8/8/8/8/3QK3 b - - 0 1"),
+            reference=stockfish,
+            reference_depth=8,
+        )
+        red = estado.evaluation()
+        referencia = estado.reference_evaluation()
+        assert referencia is not None
+        assert red.value > 0 and referencia.value > 0
+
+    def test_the_reference_is_read_from_whites_side_whoever_moves(
+        self, evaluator, stockfish
+    ) -> None:
+        """The bug this catches is the one that costs nothing to write.
+
+        `analyse` hands back a score relative to the side to move, so taking it
+        as-is makes the bar flip meaning every ply: the same position reads
+        +queen for White and +queen for Black one move apart.
+        """
+        posicion = "4k3/8/8/8/8/8/8/3QK3"
+        blancas = PlayState(
+            evaluator=evaluator, board=chess.Board(f"{posicion} w - - 0 1"),
+            reference=stockfish, reference_depth=8,
+        )
+        negras = PlayState(
+            evaluator=evaluator, board=chess.Board(f"{posicion} b - - 0 1"),
+            reference=stockfish, reference_depth=8,
+        )
+        assert blancas.reference_evaluation().value > 0
+        assert negras.reference_evaluation().value > 0
+
+    def test_the_reference_lands_on_the_same_scale_as_the_network(
+        self, evaluator, stockfish
+    ) -> None:
+        """Both bounded by `tanh`, so neither can push the bar off the end."""
+        estado = PlayState(
+            evaluator=evaluator,
+            board=chess.Board("4k3/8/8/8/8/8/8/QQQQK3 w - - 0 1"),  # absurdly won
+            reference=stockfish, reference_depth=8,
+        )
+        referencia = estado.reference_evaluation()
+        assert -1.0 <= referencia.value <= 1.0
+
+    def test_a_forced_mate_comes_back_marked_as_one(self, evaluator, stockfish) -> None:
+        estado = PlayState(
+            evaluator=evaluator,
+            board=chess.Board("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1"),   # Ra8#
+            reference=stockfish, reference_depth=8,
+        )
+        referencia = estado.reference_evaluation()
+        assert referencia.is_mate
+        assert referencia.mate == 1
+
+    def test_a_dead_engine_costs_the_comparison_and_not_the_game(
+        self, evaluator, stockfish_path: str
+    ) -> None:
+        """The person is mid-game; losing the second bar beats losing the board."""
+        import chess.engine
+
+        motor = chess.engine.SimpleEngine.popen_uci(stockfish_path)
+        estado = PlayState(evaluator=evaluator, reference=motor, reference_depth=8)
+        assert estado.reference_evaluation() is not None
+
+        motor.quit()
+        estado.invalidate_readings()
+        assert estado.reference_evaluation() is None      # no exception
+        assert estado.evaluation() is not None
+        assert jugar(estado, "e2", "e4") is Click.MOVED
+
+    def test_readings_are_not_taken_twice_for_the_same_position(
+        self, partida: PlayState
+    ) -> None:
+        """Selecting a piece redraws the panel without changing the position.
+
+        Without the cache that would put a Stockfish search on every click of a
+        piece, including the ones that only pick it up and put it back down.
+        """
+        partida.evaluation()
+        llamadas = partida.evaluator.network_calls
+        partida.click(chess.E2)
+        partida.evaluation()
+        assert partida.evaluator.network_calls == llamadas
+
+    def test_changing_the_model_drops_the_cached_readings(
+        self, partida: PlayState
+    ) -> None:
+        """Otherwise one architecture's number is shown under the other's name."""
+        partida.evaluation()
+        llamadas = partida.evaluator.network_calls
+        partida.invalidate_readings()
+        partida.evaluation()
+        assert partida.evaluator.network_calls > llamadas
 
 
 class TestReinicio:
