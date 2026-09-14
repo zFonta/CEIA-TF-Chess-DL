@@ -65,6 +65,27 @@ class GameOverError(ValueError):
     """Raised when a move is requested in a position that is already decided."""
 
 
+def mate_in(value: float) -> int | None:
+    """Moves to mate encoded in a search value, or ``None`` if it is not a mate.
+
+    A mate scores in the :data:`MATE` band with the ply distance subtracted, so
+    the distance comes back out by inverting that. The sign follows the value:
+    positive means the side to move delivers the mate, negative that it receives
+    one.
+
+    This is the inverse of a convention written in exactly one place -- the
+    scoring in :func:`_exact` -- and it belongs next to it. Decoding the band by
+    hand wherever a value is displayed is how the two drift apart, and a
+    displayed mate distance that disagrees with the search is worse than no
+    distance at all.
+    """
+    if abs(value) < MATE - MATE_STEP * 64:
+        return None
+    plies = round((MATE - abs(value)) / MATE_STEP)
+    moves = max(1, (plies + 1) // 2)
+    return moves if value > 0 else -moves
+
+
 @dataclass(frozen=True)
 class SearchResult:
     """What the search chose, and what it saw.
@@ -83,7 +104,7 @@ class SearchResult:
 
     @property
     def is_mate(self) -> bool:
-        return abs(self.value) >= MATE - MATE_STEP * 64
+        return mate_in(self.value) is not None
 
     @property
     def centipawns(self) -> float:
@@ -96,6 +117,13 @@ class SearchResult:
         lines.append("-" * 28)
         for move, value in self.ranked[:top]:
             marca = " *" if move == self.move else ""
+            mate = mate_in(value)
+            if mate is not None:
+                # A mate scores outside the network's range on purpose, so
+                # printing 1.9900 next to a centipawn figure invites the reader
+                # to compare it with an evaluation. It is not one.
+                lines.append(f"{board.san(move):<10}{f'#{mate}':>9}{'':>9}{marca}")
+                continue
             acotado = max(-1.0, min(1.0, value))
             lines.append(
                 f"{board.san(move):<10}{value:>9.4f}{value_to_cp(acotado):>9.0f}{marca}"

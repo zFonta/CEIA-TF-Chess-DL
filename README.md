@@ -156,6 +156,7 @@ el punto de entrada. Se ejecutan en orden.
 | `06_train_transformer.ipynb` | Arquitectura transformer y su primera campaña (4.8) |
 | `07_transformer_tuning.ipynb` | Barrido de 3 brazos y campaña final del transformer (4.8) |
 | `08_motor_y_partidas.ipynb` | El motor, el tiempo por jugada y las partidas contra Stockfish (bloques 5 y 6) |
+| `09_jugar_contra_el_motor.ipynb` | Tablero interactivo para jugar contra las dos redes |
 
 Las notebooks del bloque 4 **no dependen de volver a correr las del bloque 3**:
 bajan el dataset ya publicado del Hub. Y cada campaña es reanudable —el estado
@@ -302,6 +303,38 @@ Para el transformer, cambiar `ChessResNet`/`ResNetConfig` por
 interfaz —entrada `(batch, 18, 8, 8)`, salida `(batch,)` en [−1, 1]—, así que el
 resto del código no cambia.
 
+## Jugar contra el motor
+
+La notebook [`09_jugar_contra_el_motor.ipynb`](notebooks/09_jugar_contra_el_motor.ipynb)
+levanta un tablero clickeable —click en la pieza, click en el casillero— contra
+cualquiera de las dos redes, y muestra mientras tanto la evaluación de la
+posición y las cinco jugadas que el motor rankeó más alto, con su valor.
+
+```python
+from chessdl import hf
+from chessdl.engine.evaluator import Evaluator
+from chessdl.engine.loader import load_from_hub
+from chessdl.ui import PlayUI
+
+modelo = load_from_hub("zFonta/ceia-chess-models", "campana2-warmup", token=hf.get_token())
+PlayUI(Evaluator(modelo), depth=2)      # la última expresión de la celda lo dibuja
+```
+
+No agrega ninguna medición: las de la memoria salen de la notebook 08. Lo que
+agrega es poder **verificar a mano**, sobre posiciones elegidas por quien lee,
+las tres cosas que esa notebook afirma — que el mate se encuentra por reglas y
+no por la red, que un ply no ve la recaptura y dos sí, y que las dos
+arquitecturas se parecen mucho más de lo que sus nombres sugieren.
+
+Necesita `ipywidgets` (`pip install -e ".[ui]"`, ya instalado en Colab). La
+lógica de los clicks vive en `chessdl.ui.game`, sin widgets: es donde un tablero
+interactivo falla de verdad —una captura leída como reselección, una coronación
+que asume una dama, un *deshacer* que devuelve el turno al lado equivocado—, y
+nada de eso se ve en una captura de pantalla ni se puede testear moviendo
+widgets.
+
+Para una jugada suelta desde la terminal, sin tablero, está `chessdl-play`.
+
 ## Decisión de diseño central: perspectiva del jugador al turno
 
 La red **siempre ve el tablero como si le tocara jugar a las blancas**. Cuando
@@ -346,6 +379,9 @@ src/chessdl/
 │   ├── search.py      # negamax a profundidad N sobre la evaluación
 │   ├── loader.py      # reconstruye el modelo desde el model_config del checkpoint
 │   └── match.py       # partidas contra Stockfish, Elo y pérdida en centipeones
+├── ui/                         # tablero interactivo para la notebook
+│   ├── game.py        # qué significa cada click; sin widgets, y es la parte testeada
+│   └── board.py       # lo dibuja con ipywidgets
 ├── training/                   # bloque 4: cómo se entrenan
 │   ├── split.py       # partición POR PARTIDA, con hash estable
 │   ├── cache.py       # caché uint8 de tensores (2,9 GB en vez de 11,8)
@@ -365,7 +401,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 477 tests, ~45 segundos
+pytest -q                          # los 539 tests, ~40 segundos
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos

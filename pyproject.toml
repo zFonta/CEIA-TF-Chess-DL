@@ -27,7 +27,10 @@ dependencies = [
 # has no use for PyTorch, and pulling it in would make every pipeline run drag
 # a multi-gigabyte install behind it.
 train = ["torch>=2.2"]
-dev = ["pytest>=8.0", "torch>=2.2"]
+# The interactive board. Separate because it is the only part of the project
+# that needs a notebook frontend, and Colab ships ipywidgets already.
+ui = ["ipywidgets>=7.7"]
+dev = ["pytest>=8.0", "torch>=2.2", "ipywidgets>=7.7"]
 
 [project.scripts]
 chessdl-build-dataset = "chessdl.scripts.build_dataset:main"

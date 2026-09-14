@@ -32,8 +32,11 @@ torch = pytest.importorskip("torch", reason="requires the `train` extra")
 
 from chessdl.engine.evaluator import DRAW, LOSS, Evaluator, terminal_value  # noqa: E402
 from chessdl.engine.search import (  # noqa: E402
+    MATE,
+    MATE_STEP,
     GameOverError,
     best_move,
+    mate_in,
     search,
     value_white,
 )
@@ -315,6 +318,35 @@ class TestMateDistance:
         )
         resultado = search(board, evaluador, depth=1)
         assert resultado.centipawns == pytest.approx(2000, abs=1)
+
+    def test_the_distance_can_be_read_back_out_of_the_score(self, evaluador):
+        """`mate_in` inverts the encoding, and has to agree with the board.
+
+        The distance is written into the score in one place and decoded in
+        another, so the two can drift apart without anything raising: what shows
+        up is a "mate in 3" next to a move that mates immediately. Pinning the
+        round trip against the position itself is what keeps them together.
+        """
+        board = tablero(
+            (chess.H8, chess.KING, chess.BLACK),
+            (chess.G6, chess.QUEEN, chess.WHITE),
+            (chess.F6, chess.KING, chess.WHITE),
+        )
+        resultado = search(board, evaluador, depth=3)
+        assert mate_in(resultado.value) == 1
+
+        board.push(resultado.move)
+        assert board.is_checkmate()
+
+    def test_an_ordinary_evaluation_is_not_a_mate(self, evaluador):
+        board = chess.Board()
+        assert mate_in(search(board, evaluador, depth=1).value) is None
+        assert mate_in(0.0) is None
+        assert mate_in(0.9999) is None
+
+    def test_being_mated_reads_as_a_negative_distance(self, evaluador):
+        """The sign says who delivers it, which is the half that inverts."""
+        assert mate_in(-(MATE - MATE_STEP)) == -1
 
 
 class TestDepthMechanics:

@@ -357,7 +357,7 @@ caché de entrenamiento, descartable.
 | 4.4 Primera campaña (20 h) | Entrenamiento y diagnóstico contra los baselines | `04_train_campaign` |
 | 4.5 Hiperparámetros (30 h) | Ajuste, y las variantes marcadas arriba como experimentos | `05_hyperparameters` |
 | 4.6 Segunda campaña (20 h) | Configuración optimizada | `05_hyperparameters` |
-| 4.7 Validación y test (16 h) | Métricas sobre el split de test, tiempo de inferencia por lote, desglose por control de tiempo | pendiente |
+| 4.7 Validación y test (16 h) | Métricas sobre el split de test, tiempo de inferencia por lote, desglose por control de tiempo | `08_motor_y_partidas` |
 | 4.8 Transformer (36 h) | Arquitectura, entrenamiento con el mismo presupuesto, comparación | `06_train_transformer`, `07_transformer_tuning` |
 
 ### Resultados hasta acá
