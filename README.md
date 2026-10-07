@@ -22,13 +22,16 @@ esa evaluación, y el motor que las usa para elegir jugadas.
 Todos los bloques están **corridos**: los números de este README salen de las
 notebooks versionadas con su salida.
 
-Requerimientos del plan cubiertos: **1.1 a 1.4, 1.6, 1.7, 2.2, 2.3, 3.1, 3.2,
-4.2, 5.1, 5.2 y 6.1**.
+Requerimientos del plan cubiertos: **1.1 a 1.7, 2.2 a 2.4, 3.1, 3.2, 4.1, 4.2,
+5.1 y 5.2**, y los tres opcionales: **6.1** (transformer), **6.2** (búsqueda de
+más de un ply) y **6.3** (Elo aproximado). El 2.1 es la memoria, que no vive en
+este repositorio. La notebook 08 cierra con una tabla que junta cada
+requerimiento con el número que lo cumple.
 
-El **1.7** (5 segundos por jugada) quedó medido y no estimado: **10 ms** en el
-percentil 90 de partidas reales sobre Colab T4 con búsqueda de un nivel, y
-**285 ms** con dos. El número depende del hardware, así que va siempre con él al
-lado.
+El **1.7** (5 segundos por jugada) quedó medido como lo pide el plan —percentil
+99 sobre 100 posiciones de test, con entre 1 y 59 jugadas legales, en Colab T4—:
+**23 ms** con búsqueda de un nivel y **583 ms** con dos, en el más lento de los
+dos modelos. El número depende del hardware, así que va siempre con él al lado.
 
 ### El dataset generado
 
@@ -87,25 +90,60 @@ El RMSE mide cuánto se parece la red a Stockfish; la **pérdida media en
 centipeones** mide cuánto juega. Sobre 400 posiciones de test, comparando cada
 jugada elegida contra la mejor según Stockfish a profundidad 12:
 
-| motor | ACPL | acuerdo con SF | errores > 300 cp | ms/jugada (p90) |
+| motor | ACPL | acuerdo con SF | errores > 300 cp | ms/jugada (p99) |
 |---|---|---|---|---|
-| ResNet, 1 ply | 176,8 ± 14,4 | 30,5 % | 21,0 % | 10 |
-| Transformer, 1 ply | 257,1 ± 18,6 | 28,5 % | 34,2 % | 11 |
-| **ResNet, 2 plies** | **87,4 ± 11,2** | **39,0 %** | **5,5 %** | 285 |
-| **Transformer, 2 plies** | **97,9 ± 10,7** | **37,8 %** | **8,0 %** | 447 |
+| ResNet, 1 ply | 176,8 ± 14,4 | 30,5 % | 21,0 % | 23 |
+| Transformer, 1 ply | 257,1 ± 18,6 | 28,5 % | 34,2 % | 13 |
+| **ResNet, 2 plies** | **87,4 ± 11,2** | **39,0 %** | **5,5 %** | 388 |
+| **Transformer, 2 plies** | **97,9 ± 10,7** | **37,8 %** | **8,0 %** | 583 |
 
 **Un ply más parte la pérdida al medio y reduce los errores graves a un cuarto**,
-y sigue 18 veces por debajo del presupuesto del requerimiento 1.7. Es el ply que
-cierra el punto ciego de la recaptura: a un nivel el árbol termina en la jugada
-propia y la respuesta del rival no está en él.
+y sigue entre 9 y 13 veces por debajo del presupuesto del requerimiento 1.7. Es
+el ply que cierra el punto ciego de la recaptura: a un nivel el árbol termina en
+la jugada propia y la respuesta del rival no está en él.
 
-Y la comparación entre arquitecturas **se da vuelta con la profundidad**: a 1 ply
-la ResNet le saca 80,3 ± 23,5 cp —una diferencia clara, que el empate del 0,80 %
-en RMSE no anticipaba—, y a 2 plies la brecha cae a 10,5 ± 15,5, dentro del error.
-La búsqueda rescata los errores locales de la red más ruidosa, así que *"cuál
-arquitectura es mejor"* depende de cuánta búsqueda haya encima.
+En pérdida media, la comparación entre arquitecturas **se da vuelta con la
+profundidad**: a 1 ply la ResNet le saca 80,3 ± 23,5 cp —una diferencia clara,
+que el empate del 0,80 % en RMSE no anticipaba—, y a 2 plies la brecha cae a
+10,5 ± 15,5, dentro del error. Las partidas matizan esa lectura (abajo): la
+búsqueda achica la diferencia, pero no la borra.
 
-Profundidad 3 **no entra** en el presupuesto: 9,7 s en el percentil 90 sobre T4.
+Profundidad 3 **no entra** en el presupuesto: 8,6 s (ResNet) y 14,5 s
+(transformer) en el percentil 99 sobre T4.
+
+### Fuerza de juego: Elo y partidas contra Stockfish
+
+Cada motor —red y profundidad— jugó **90 partidas** contra Stockfish con la
+fuerza acotada por `UCI_Elo` a 1320, 1500 y 1700: 30 por escalón, cada apertura
+con los dos colores, el rival con 50 ms por jugada. Las 360 terminaron por las
+reglas, sin ninguna interrumpida ni una sola jugada ilegal (requerimientos 2.4 y
+1.5). El Elo se ajusta contra los tres escalones a la vez, por máxima
+verosimilitud (requerimiento 6.3):
+
+| motor | victorias | tablas | derrotas | Elo (± 1σ) |
+|---|---|---|---|---|
+| ResNet, 1 ply | 4 % | 17 % | 79 % | 1124 ± 56 |
+| Transformer, 1 ply | 0 % | 9 % | 91 % | 916 ± 90 |
+| **ResNet, 2 plies** | **46 %** | **16 %** | **39 %** | **1534 ± 40** |
+| **Transformer, 2 plies** | **26 %** | **18 %** | **57 %** | **1373 ± 41** |
+
+- **El segundo ply vale unos 400 puntos de Elo** en las dos arquitecturas: el
+  mismo salto que la tabla de pérdida media, ahora en resultados.
+- **A 2 plies el Elo separa lo que la pérdida media no**: 161 ± 57 puntos a favor
+  de la ResNet, casi tres sigmas. Coincide con la columna de errores graves
+  (5,5 % contra 8,0 %): una partida la decide el peor error, no el promedio.
+- **Es Elo en la escala de `UCI_Elo` de Stockfish**, no de Lichess ni FIDE, y la
+  escala trae una salvedad: leído escalón por escalón, el Elo implícito sube con
+  el escalón —la ResNet a 2 plies da 1467, 1512 y 1617—, señal de que a 50 ms por
+  jugada los niveles de Stockfish quedan más juntos de lo que dicen sus
+  etiquetas. El ± es un piso de la incertidumbre del número absoluto; la
+  comparación entre motores, medidos contra la misma escalera, es más firme.
+
+Contra Stockfish **a fuerza completa pero limitado a un ply** —la misma búsqueda
+que el motor, así que lo único distinto es la función de evaluación— las dos
+redes sacan 0,28 y 0,25 puntos por partida, sin ganar ninguna, y casi todas sus
+tablas son por repetición. Ese rival no tiene un Elo calibrado, así que el
+resultado no se traduce a una escala.
 
 ## Qué hace el pipeline
 
@@ -201,7 +239,7 @@ Validar la integridad (requerimiento 3.2):
 python -m chessdl.scripts.validate_dataset --shards-dir <dir> --stats
 ```
 
-Jugar o analizar con el motor (requerimientos 1.6, 1.7 y 4.2):
+Jugar o analizar con el motor (requerimientos 1.6, 1.7, 4.1 y 4.2):
 
 ```bash
 # Analizar una posicion: la jugada elegida y las alternativas, en centipeones
@@ -331,14 +369,16 @@ La referencia corre a **profundidad 12, la que etiquetó el dataset**: es la
 lectura que la red fue entrenada para reproducir, así que la brecha entre las
 dos barras es el error del modelo y nada más. Una referencia más profunda sería
 mejor ajedrecista y peor vara. Esa brecha, sobre la posición que tenés delante,
-es un término del error que la memoria reporta promediado — el RMSE de test de
-0,2511 es la raíz de la media de exactamente eso.
+es un término del error que la memoria reporta promediado — el RMSE de test
+(0,2511 la ResNet, 0,2531 el transformer) es la raíz de la media de exactamente
+eso.
 
 No agrega ninguna medición: las de la memoria salen de la notebook 08. Lo que
 agrega es poder **verificar a mano**, sobre posiciones elegidas por quien lee,
 las tres cosas que esa notebook afirma — que el mate se encuentra por reglas y
-no por la red, que un ply no ve la recaptura y dos sí, y que las dos
-arquitecturas se parecen mucho más de lo que sus nombres sugieren.
+no por la red, que un ply no ve la recaptura y dos sí, y que con dos plies las
+dos arquitecturas pierden casi lo mismo por jugada aunque la ResNet saque más
+puntos contra Stockfish.
 
 Necesita `ipywidgets` (`pip install -e ".[ui]"`, ya instalado en Colab). La
 lógica de los clicks vive en `chessdl.ui.game`, sin widgets: es donde un tablero
@@ -415,7 +455,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 550 tests, ~45 segundos
+pytest -q                          # los 581 tests, poco más de un minuto
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos
@@ -427,9 +467,10 @@ pytest --collect-only -q           # listarlos sin ejecutarlos
 !{sys.executable} -m pytest -q
 ```
 
-La notebook `01_build_dataset.ipynb` ya trae esa celda en su sección 2: conviene
-correrla antes de lanzar el etiquetado, y su salida sirve como evidencia de los
-requerimientos de testing (3.1 y 3.2) para la memoria. Para que `pytest` esté
+Las notebooks `01_build_dataset.ipynb` y `08_motor_y_partidas.ipynb` ya traen
+esa celda en su sección 2: conviene correrla antes de lanzar el etiquetado o los
+torneos, y su salida sirve como evidencia de los requerimientos de testing (3.1
+y 3.2) para la memoria. Para que `pytest` esté
 disponible hay que instalar con el extra `dev` (`pip install -e ".[dev]"`), que
 es lo que hace la celda de entorno de las notebooks.
 
@@ -442,6 +483,14 @@ Lo que cubren, en orden de importancia:
 - **`test_encoding.py`** — el espejado del tablero: invarianza, derechos de
   enroque, captura al paso, promoción, y que la codificación de un board vivo
   coincida con la de su FEN.
+- **`test_engine.py`** — el motor sobre posiciones con respuesta conocida: mate
+  en 1, dama gratis, ahogado evitado, el punto ciego de un ply y su cierre con
+  dos. Incluye los casos especiales del requerimiento 3.1 —enroque, captura al
+  paso y coronación, también en caballo cuando esa es la que da mate—, ofrecidos
+  cuando son legales y ausentes cuando las reglas los prohíben.
+- **`test_match.py`** — las partidas contra Stockfish: el Elo ajustado contra
+  varios escalones, cómo terminó cada partida, los porcentajes del 2.4, y que
+  una jugada ilegal corte la partida en vez de corromperla.
 - **`test_split.py`** — que la partición sea **por partida** y no por posición.
   Es la decisión metodológica más importante del bloque 4: hacerla mal infla la
   validación y no se detecta hasta que el motor juega peor que sus métricas.
@@ -460,6 +509,9 @@ Lo que cubren, en orden de importancia:
   desincronicen. Cubre las fallas que ya costaron una sesión de Colab: instalar
   sin el extra `dev`, no poner `src/` en `sys.path`, tapar un `git pull` fallido
   con `check=False`, o llamar a `!python` en vez de `!{sys.executable}`.
+- **`test_ui.py`** y **`test_engine_cli.py`** — los clicks del tablero (enroque
+  clickeando la torre, coronación que pregunta, deshacer) y la línea de comando
+  del requerimiento 4.1.
 - **`test_normalize.py`**, **`test_metrics.py`**, **`test_baselines.py`**,
   **`test_training_cache.py`**, **`test_experiments.py`**,
   **`test_sampling.py`**, **`test_pgn_filter.py`**.

@@ -13,7 +13,7 @@ diferencias.
 | Pesos de la red en formato estándar (`.pt`) | Repositorio de modelos en Hugging Face |
 | Registro del experimento (hiperparámetros, curvas, métricas) | Mismo repositorio, junto a cada checkpoint |
 | Diagrama de la arquitectura de la red | [Más abajo en este documento](#diagramas-de-las-arquitecturas), una por arquitectura |
-| Métricas sobre validación y test | Tabla de resultados de este documento; **falta el desglose de 4.7** |
+| Métricas sobre validación y test | Tabla de resultados de este documento; el desglose de 4.7 (tiempo de inferencia y control de tiempo) está en la notebook `08`, secciones 5 y 6 |
 
 ## Las dos arquitecturas
 
@@ -231,6 +231,11 @@ su verificación es del bloque 5.
 Lo único que se hace acá es **registrar el tiempo de inferencia por lote** en el
 entorno donde se entrena, como dato de referencia. Es gratis de medir y le ahorra
 trabajo al bloque 5, pero no condiciona la arquitectura.
+
+> **Verificado en el bloque 5** (notebook `08`, sección 6), como lo pide el plan:
+> percentil 99 sobre 100 posiciones de test, en T4. En el más lento de los dos
+> modelos, 23 ms por jugada a un ply y 583 ms a dos. Ver
+> [Profundidad 3: no entra](#profundidad-3-no-entra) más abajo.
 
 ### Entorno de entrenamiento: GPU T4, runtime estándar
 
@@ -490,67 +495,111 @@ y la diferencia es el resultado del bloque.
 
 **Un ply más parte la pérdida al medio y reduce los errores graves a un cuarto.**
 Era la predicción —profundidad 2 cierra el punto ciego de la recaptura— y se
-cumplió con holgura. Cuesta 285 ms por jugada contra los 8 ms de un ply, que
-igual queda 18 veces por debajo del presupuesto del requerimiento 1.7.
+cumplió con holgura. Cuesta entre 388 y 583 ms por jugada en el percentil 99
+—según el modelo— contra 13 a 23 ms a un ply, y queda entre 9 y 13 veces por
+debajo del presupuesto del requerimiento 1.7.
 
-#### La comparación entre arquitecturas se da vuelta con la profundidad
+#### La comparación entre arquitecturas, según la profundidad
 
-| profundidad | diferencia de ACPL | ¿se distinguen? |
+| profundidad | diferencia de ACPL | diferencia de Elo |
 |---|---|---|
-| 1 ply | **80,3 ± 23,5** a favor de la ResNet | Sí, con claridad |
-| 2 plies | 10,5 ± 15,5 a favor de la ResNet | No, dentro del error |
+| 1 ply | **80,3 ± 23,5** a favor de la ResNet — se distinguen | 208 ± 106 a favor de la ResNet |
+| 2 plies | 10,5 ± 15,5 a favor de la ResNet — **dentro del error** | **161 ± 57** a favor de la ResNet |
 
 **Es el resultado más interesante del bloque.** Con un ply la búsqueda no corrige
-nada y manda la evaluación cruda: ahí la ResNet le saca ventaja clara, y el
-empate del 0,80 % en RMSE resulta ser un mal predictor. Con dos plies la brecha
-se vuelve indistinguible: la búsqueda rescata los errores locales de la red más
-ruidosa.
+nada y manda la evaluación cruda: ahí la ResNet le saca ventaja clara en las dos
+medidas, y el empate del 0,80 % en RMSE resulta ser un mal predictor. Con dos
+plies la pérdida media se vuelve indistinguible: la búsqueda rescata los errores
+locales de la red más ruidosa.
 
-O sea que *"cuál arquitectura es mejor"* no tiene una respuesta sola — depende de
-cuánta búsqueda haya encima. El RMSE predijo bien el caso con búsqueda y mal el
-caso sin ella, y eso es una advertencia sobre la métrica, no sólo sobre los
-modelos.
+Pero el Elo no acompaña del todo: a dos plies la ResNet le sigue sacando 161
+puntos, casi tres sigmas. Las dos medidas no se contradicen, miden cosas
+distintas. La pérdida media promedia todas las jugadas, y a dos plies la búsqueda
+empareja ese promedio; una partida, en cambio, la decide el peor error, y ahí la
+ResNet sigue cometiendo menos (5,5 % contra 8,0 % de jugadas que tiran más de
+300 cp).
+
+O sea que la búsqueda **achica** la diferencia entre arquitecturas, pero no la
+borra, y *"cuál arquitectura es mejor"* depende tanto de cuánta búsqueda haya
+encima como de qué se mida. El empate en RMSE anticipó bien un solo caso —la
+pérdida media con búsqueda—, y eso es una advertencia sobre la métrica, no sólo
+sobre los modelos.
 
 #### Profundidad 3: no entra
 
-La predicción de que entraría en GPU **estaba equivocada**. Medido en T4:
+La predicción de que entraría en GPU **estaba equivocada**. Medido en T4 con la
+ResNet, sobre 100 posiciones de test repartidas por el split (8 a profundidad 3)
+y con el percentil 99 que pide el plan para el requerimiento 1.7:
 
-| profundidad | hojas | mediana | p90 | margen vs 5 s |
+| profundidad | hojas | mediana | p99 | margen vs 5 s |
 |---|---|---|---|---|
-| 1 | 29 | 8 ms | 10 ms | 483× |
-| 2 | 1.015 | 214 ms | 285 ms | 18× |
-| 3 | 32.688 | 4.124 ms | **9.653 ms** | **no entra** |
+| 1 | 30 | 6 ms | 23 ms | 218× |
+| 2 | 1.072 | 158 ms | 388 ms | 13× |
+| 3 | 25.897 | 2.823 ms | **8.588 ms** | **no entra** |
 
-Había estimado ~1,8 s a partir del rendimiento por lote; el real es 4,1 s de
-mediana y 9,7 s en el percentil 90. El error fue extrapolar desde el rendimiento
+Había estimado ~1,8 s a partir del rendimiento por lote; el real es 2,8 s de
+mediana y 8,6 s en el percentil 99. El error fue extrapolar desde el rendimiento
 con lotes de 2.048 —20.247 pos/s— a un régimen que nunca ve lotes así: el árbol
 se evalúa en tandas, pero el sobrecosto por nodo y el recorrido en Python no
 escalan como la multiplicación de matrices. En el transformer es peor todavía
-(19,3 s en el p90), coherente con que su rendimiento por lote grande es 3,5 veces
+(14,5 s en el p99), coherente con que su rendimiento por lote grande es 3,5 veces
 menor que el de la ResNet.
 
 #### Fuerza de juego
 
-Contra Stockfish con la fuerza acotada por `UCI_Elo`, 30 partidas por escalón,
-cada apertura jugada dos veces con los colores cambiados.
+Contra Stockfish con la fuerza acotada por `UCI_Elo` a 1320, 1500 y 1700, con
+50 ms por jugada para el rival. Cada combinación de red y profundidad juega 30
+partidas por escalón —15 aperturas del split de test, cada una dos veces con los
+colores cambiados—, 90 en total, y el Elo se ajusta contra los tres escalones a
+la vez por máxima verosimilitud:
 
-> **Número pendiente de la segunda corrida.** La primera midió la escalera con el
-> motor a **1 ply** y con Stockfish limitado por profundidad, y las dos cosas se
-> corrigieron:
->
-> - El Elo de Stockfish está calibrado para búsquedas **con control de tiempo**.
->   Fijarle la profundidad a mano pisa el mecanismo con el que se debilita: el
->   rival juega debilitado, pero su Elo no es el de la etiqueta. Para la memoria
->   eso es peor que no tener el número, así que pasó a un límite de tiempo.
-> - La escalera corría a 1 ply mientras la tabla de arriba mostraba que 2 plies
->   parten la pérdida al medio. Sobre el escalón de 1.500, la ResNet pasó de
->   **0,125 a 0,500 puntos por partida** al agregar un ply: del orden de 300
->   puntos de Elo, sobre 12 partidas por brazo, así que es indicativo y no una
->   medición. La escalera ahora corre a 2 plies.
+| motor | vs 1320 | vs 1500 | vs 1700 | V / T / D | Elo (± 1σ) |
+|---|---|---|---|---|---|
+| ResNet, 1 ply | 0,150 | 0,100 | 0,133 | 4 / 17 / 79 % | 1124 ± 56 |
+| Transformer, 1 ply | 0,033 | 0,033 | 0,067 | 0 / 9 / 91 % | 916 ± 90 |
+| **ResNet, 2 plies** | 0,700 | 0,517 | 0,383 | 46 / 16 / 39 % | **1534 ± 40** |
+| **Transformer, 2 plies** | 0,617 | 0,183 | 0,233 | 26 / 18 / 57 % | **1373 ± 41** |
 
-Y una salvedad que se mantiene con cualquier corrección: **30 partidas por
-escalón dejan un error de ±0,05 en la tasa de puntos**, que en Elo son decenas de
-puntos. La escalera ubica al motor en una franja, no en un número.
+(puntos por partida contra cada escalón; V / T / D, victorias, tablas y derrotas
+sobre las 90 partidas)
+
+Las 360 partidas terminaron por las reglas —mate, ahogado, repetición—, ninguna
+interrumpida y ninguna con una jugada ilegal: es el requerimiento 2.4, que pide al
+menos 50 partidas contra Stockfish a Elo bajo con los porcentajes de victorias,
+tablas y derrotas.
+
+- **El segundo ply vale unos 400 puntos de Elo:** +410 ± 69 en la ResNet y
+  +457 ± 99 en el transformer. Es la tabla de pérdida media, ahora en resultados.
+- **La diferencia entre arquitecturas sobrevive a la búsqueda** en Elo, aunque no
+  en pérdida media (sección anterior).
+- **Una salvedad sobre la escala.** Leído escalón por escalón, el Elo implícito
+  sube con el escalón en tres de los cuatro motores, y en el cuarto (transformer
+  a 2 plies) el escalón más alto también da el número más alto. La ResNet a 2
+  plies, por ejemplo, da 1467 contra el de 1320, 1512 contra el de 1500 y 1617
+  contra el de 1700. Si las etiquetas de Stockfish fueran exactas, los tres
+  darían lo mismo dentro del ruido. Que no
+  lo hagan sugiere que, a 50 ms por jugada, los niveles de `UCI_Elo` quedan más
+  juntos de lo que dicen sus etiquetas. Por eso el ± de un sigma es un piso de la
+  incertidumbre del número absoluto, y lo que se sostiene con más firmeza es la
+  comparación entre motores, medidos contra la misma escalera. Tampoco es un Elo
+  de Lichess ni FIDE: es la escala de Stockfish.
+
+Contra Stockfish **a fuerza completa limitado a un ply** —la misma búsqueda que
+el motor, así que lo único distinto es la función de evaluación— la ResNet sacó
+0,283 puntos por partida (0 victorias, 17 tablas, 13 derrotas) y el transformer
+0,250 (0, 15, 15). Las tablas son casi todas por repetición: dos motores
+deterministas a un ply se quedan repitiendo jugadas. Ese rival no tiene un Elo
+calibrado, así que el resultado compara evaluaciones y no se traduce a una
+escala.
+
+> **Cómo se llegó a esta escalera.** La primera corrida midió con el motor a un
+> solo ply y con Stockfish limitado por **profundidad**. Lo segundo se corrigió
+> porque `UCI_Elo` está calibrado para búsquedas con control de tiempo: fijarle
+> la profundidad pisa el mecanismo con el que se debilita, y el rival juega
+> debilitado pero su Elo deja de ser el de la etiqueta. Y el Elo, que al
+> principio se leía del escalón más bajo, pasó a ajustarse contra los tres: con
+> partidas simuladas de Elo conocido, leer un escalón erró entre 52 y 95 puntos,
+> y el ajuste conjunto entre 31 y 37.
 
 ### Qué queda como trabajo futuro
 
@@ -595,4 +644,5 @@ lo consigue con un tercio del cómputo de entrenamiento.**
 > Así que el costo **no** decide qué modelo va en el motor, como se afirmó acá
 > antes de medirlo. Las dos arquitecturas entran holgadas en el requerimiento 1.7
 > —unas 50 veces por debajo de los 5 segundos— y la elección queda librada a la
-> fuerza de juego, que es lo que mide el bloque 6.
+> fuerza de juego, que es lo que mide el bloque 6. Ahí la ResNet sale adelante:
+> 1534 contra 1373 de Elo a dos plies, con menos errores graves por jugada.
