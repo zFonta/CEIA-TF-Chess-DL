@@ -46,9 +46,15 @@ from ..normalize import score_to_cp
 from .evaluator import Evaluator
 from .search import GameOverError, search
 
-#: Plies before a game is called a draw. Two weak engines can shuffle forever,
-#: and an unfinished game still has to become a row in the table.
-MAX_PLIES = 200
+#: Plies before a game is cut off. A safety net, not a rule: draws are claimed
+#: as soon as they can be (threefold repetition, fifty moves), so a game between
+#: two engines that shuffle ends long before this. A game that does reach it was
+#: not finished, and :class:`MatchResult` reports it as interrupted instead of
+#: hiding it among the draws -- requirement 2.4 asks for games with none.
+MAX_PLIES = 400
+
+#: Terminations that mean the game did not finish by the rules.
+UNFINISHED = frozenset({"max_plies", "interrupted"})
 
 #: How a game ended, in the words the tables use. The keys are the
 #: ``chess.Termination`` names in lower case, plus the two ways a game here can
@@ -89,6 +95,11 @@ class GameResult:
     def drawn(self) -> bool:
         return self.score == 0.5
 
+    @property
+    def finished(self) -> bool:
+        """Ended by the rules of chess rather than cut off by the harness."""
+        return self.termination not in UNFINISHED
+
 
 @dataclass
 class MatchResult:
@@ -109,6 +120,20 @@ class MatchResult:
         wins = sum(1 for g in self.games if g.won)
         draws = sum(1 for g in self.games if g.drawn)
         return wins, draws, len(self.games) - wins - draws
+
+    @property
+    def percentages(self) -> tuple[float, float, float]:
+        """Wins, draws and losses as fractions of the games (requirement 2.4)."""
+        if not self.games:
+            return (float("nan"),) * 3
+        n = len(self.games)
+        wins, draws, losses = self.record
+        return wins / n, draws / n, losses / n
+
+    @property
+    def unfinished(self) -> int:
+        """Games cut off before the rules ended them; 2.4 wants this at zero."""
+        return sum(1 for g in self.games if not g.finished)
 
     def elo_difference(self) -> float:
         """Elo gap implied by the score rate, positive when the engine is ahead.
@@ -137,6 +162,11 @@ class MatchResult:
         wins, draws, losses = self.record
         lines = [f"{self.label or 'torneo'}: {len(self.games)} partidas"]
         lines.append(f"  {wins}W {draws}T {losses}D")
+        if self.games:
+            v, e, d = self.percentages
+            lines.append(f"  victorias {v:.0%}, tablas {e:.0%}, derrotas {d:.0%}")
+            lines.append(f"  terminadas por las reglas  {len(self.games) - self.unfinished}"
+                         f" de {len(self.games)}")
         lines.append(f"  puntos por partida  {self.score_rate:.3f} +- {self.margin():.3f}")
         elo = self.elo_difference()
         lines.append(
@@ -266,12 +296,17 @@ def play_game(
             except GameOverError:
                 break
             tiempos.append(resultado.seconds)
-            board.push(resultado.move)
+            jugada = resultado.move
         else:
             jugada = opponent.play(board, limit).move
             if jugada is None:
                 break
-            board.push(jugada)
+        # `push` does not check legality, so an illegal move would carry on as
+        # a corrupt game. Stopping here is what lets a finished match vouch that
+        # every move in it was legal (requirements 1.5 and 2.4).
+        if not board.is_legal(jugada):
+            raise chess.IllegalMoveError(f"jugada ilegal {jugada.uci()} en {board.fen()}")
+        board.push(jugada)
 
     outcome = board.result(claim_draw=True)
     if outcome == "1/2-1/2" or outcome == "*":

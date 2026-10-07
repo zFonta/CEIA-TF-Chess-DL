@@ -195,6 +195,99 @@ class TestItPlaysChess:
             board.push(elegida)
 
 
+class TestSpecialMoves:
+    """Castling, en passant and promotion, generated and searched (requirement 3.1).
+
+    The three moves that do not fit the "a piece goes from one square to another"
+    picture: castling moves two pieces, en passant captures on a square nobody
+    moved to, promotion changes what the piece is. Each is checked both ways --
+    offered and played when it is legal, absent when the rules forbid it.
+    """
+
+    @staticmethod
+    def ranked(board: chess.Board, evaluador: Evaluator) -> dict[chess.Move, float]:
+        return dict(search(board, evaluador).ranked)
+
+    # -- castling ----------------------------------------------------------------
+
+    def test_both_castlings_are_offered_when_the_rights_allow_them(self, evaluador):
+        board = chess.Board("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+        enroques = {m for m in self.ranked(board, evaluador) if board.is_castling(m)}
+        assert enroques == {chess.Move.from_uci("e1g1"), chess.Move.from_uci("e1c1")}
+
+    def test_a_castling_that_mates_is_scored_as_mate(self, evaluador):
+        # The rook lands on f1 and checks up the open file; the king is boxed in.
+        board = chess.Board("4rkr1/4p1p1/8/8/8/8/8/4K2R w K - 0 1")
+        valores = self.ranked(board, evaluador)
+        assert mate_in(valores[chess.Move.from_uci("e1g1")]) == 1
+        board.push(best_move(board, evaluador))
+        assert board.is_checkmate()
+
+    def test_no_castling_through_an_attacked_square(self, evaluador):
+        # The rook on f2 covers f1, which the king would have to cross.
+        board = chess.Board("4k3/8/8/8/8/8/5r2/4K2R w K - 0 1")
+        assert not any(board.is_castling(m) for m in self.ranked(board, evaluador))
+
+    def test_no_castling_once_the_rights_are_gone(self, evaluador):
+        board = chess.Board("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w kq - 0 1")
+        assert not any(board.is_castling(m) for m in self.ranked(board, evaluador))
+
+    # -- en passant --------------------------------------------------------------
+
+    def test_it_captures_en_passant_when_that_wins_material(self, evaluador):
+        board = chess.Board()
+        for san in ("e4", "d5", "Nf3", "d4", "c4"):
+            board.push_san(san)
+        elegida = best_move(board, evaluador)
+        assert board.is_en_passant(elegida)
+        assert board.san(elegida) == "dxc3"
+
+    def test_en_passant_as_the_only_legal_move_is_found(self, evaluador):
+        # b2-b4 gave check; taking the pawn en passant is the only way out.
+        board = chess.Board("1Q6/8/3R4/k7/1Pp5/K7/8/8 b - b3 0 1")
+        elegida = best_move(board, evaluador)
+        assert board.is_en_passant(elegida)
+        board.push(elegida)
+        assert board.piece_at(chess.B4) is None and board.piece_at(chess.B3) is not None
+
+    def test_no_en_passant_that_exposes_the_own_king(self, evaluador):
+        # Taking on c6 empties the fifth rank between the king and the rook.
+        board = chess.Board("8/8/8/K1pP3r/8/8/8/7k w - c6 0 1")
+        assert board.ep_square == chess.C6
+        assert not any(board.is_en_passant(m) for m in self.ranked(board, evaluador))
+
+    # -- promotion ---------------------------------------------------------------
+
+    def test_all_four_promotions_are_offered(self, evaluador):
+        board = tablero((chess.A7, chess.PAWN, chess.WHITE),
+                        (chess.E1, chess.KING, chess.WHITE),
+                        (chess.H5, chess.KING, chess.BLACK))
+        piezas = {m.promotion for m in self.ranked(board, evaluador) if m.promotion}
+        assert piezas == {chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT}
+
+    def test_a_free_promotion_becomes_a_queen(self, evaluador):
+        board = tablero((chess.A7, chess.PAWN, chess.WHITE),
+                        (chess.E1, chess.KING, chess.WHITE),
+                        (chess.H5, chess.KING, chess.BLACK))
+        assert best_move(board, evaluador).promotion == chess.QUEEN
+
+    def test_it_underpromotes_to_a_knight_when_that_mates(self, evaluador):
+        # c8=Q wins more material on paper; c8=N is mate. The rules have to win.
+        board = chess.Board("8/b1P1R3/3k4/8/2R1K3/8/8/8 w - - 0 1")
+        elegida = best_move(board, evaluador)
+        assert elegida == chess.Move.from_uci("c7c8n")
+        board.push(elegida)
+        assert board.is_checkmate()
+
+    def test_a_black_pawn_promotes_on_the_first_rank(self, evaluador):
+        board = tablero((chess.D2, chess.PAWN, chess.BLACK),
+                        (chess.H8, chess.KING, chess.BLACK),
+                        (chess.A4, chess.KING, chess.WHITE), turno=chess.BLACK)
+        elegida = best_move(board, evaluador)
+        assert elegida.promotion == chess.QUEEN
+        assert chess.square_rank(elegida.to_square) == 0
+
+
 class TestWhatOnePlyCannotDo:
     """The limit of the method, pinned down rather than wished away.
 

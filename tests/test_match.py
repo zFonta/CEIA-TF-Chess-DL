@@ -132,6 +132,23 @@ class TestScoreArithmetic:
     def test_a_match_without_draws_does_not_mention_them(self):
         assert "tablas por" not in MatchResult([partida(1.0), partida(0.0)]).summary()
 
+    def test_the_percentages_add_up_to_the_record(self):
+        """Requirement 2.4 asks for percentages, not only counts."""
+        resultado = MatchResult([partida(1.0), partida(0.5), partida(0.0), partida(1.0)])
+        assert resultado.percentages == pytest.approx((0.5, 0.25, 0.25))
+        assert "victorias 50%, tablas 25%, derrotas 25%" in resultado.summary()
+
+    def test_a_game_cut_off_is_counted_as_unfinished(self):
+        """2.4 wants no interrupted games, so the table has to be able to say so."""
+        cortada = GameResult(0.5, 400, "*", True, 0.01, "max_plies")
+        reglas = GameResult(0.5, 80, "1/2-1/2", True, 0.01, "threefold_repetition")
+        resultado = MatchResult([cortada, reglas, partida(1.0)])
+        assert resultado.unfinished == 1
+        assert "terminadas por las reglas  2 de 3" in resultado.summary()
+
+    def test_hand_built_results_count_as_finished(self):
+        assert MatchResult([partida(1.0), partida(0.0)]).unfinished == 0
+
 
 def match_simulado(elo_motor: float, rival: float, n: int, rng) -> MatchResult:
     """Games drawn from the logistic model itself, so the right answer is known."""
@@ -218,6 +235,17 @@ class TestHowGamesEnd:
                               start_fen=tonto, engine_white=True)
         assert resultado.termination == "checkmate"
         assert resultado.score == 0.0
+
+    def test_an_illegal_move_stops_the_game_instead_of_corrupting_it(self, evaluador):
+        """`Board.push` takes anything; the match must not."""
+
+        class Tramposo:
+            def play(self, board, limit):
+                return chess.engine.PlayResult(chess.Move.from_uci("e7e4"), None)
+
+        with pytest.raises(chess.IllegalMoveError):
+            play_game(evaluador, Tramposo(), chess.engine.Limit(time=0.01),
+                      engine_white=True, max_plies=4)
 
     def test_every_ending_has_a_label(self):
         for motivo in chess.Termination:
