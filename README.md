@@ -207,6 +207,27 @@ y los dos comandos de línea de comando tienen su celda equivalente. La única
 excepción es `tests/fixtures/make_fixture.py`, una herramienta de desarrollo que
 regenera el PGN de prueba y solo se corre si se quiere cambiar su contenido.
 
+### Apéndice — ¿el error sigue bajando con más datos?
+
+Fuera del alcance del plan, en [`notebooks/apendice/`](notebooks/apendice). El
+bloque 4 concluyó que el techo lo pone el dataset; el apéndice lo pone a prueba
+con el dump público de evaluaciones de Lichess (`lichess_db_eval`, también
+**CC0**), que ya trae la evaluación de Stockfish de cada posición y permite
+llegar a decenas de millones sin etiquetar nada.
+
+| Notebook | Para qué |
+|---|---|
+| `lichess_1_survey.ipynb` | Recorrer el dump y decidir qué volúmenes entran · **CPU** |
+| `lichess_2_entrenamiento.ipynb` | La ResNet de la memoria con 5, 10 y 30 millones de posiciones, y una el doble de profunda con 30 · **GPU con alta RAM** |
+| `lichess_3_elo.ipynb` | Las mediciones de la 08 sobre esos cuatro modelos —RMSE en el test del proyecto, tiempo por jugada, pérdida en centipeones, Elo a 1 y 2 plies— y la comparación con los dos de la memoria |
+| `lichess_4_jugar.ipynb` | El tablero de la 09, apuntado a esos modelos |
+
+Sus números **no son comparables en nivel** con los de la memoria —otras
+etiquetas, otra profundidad de Stockfish, menos épocas—. Lo que el apéndice
+aporta es la forma de la curva al crecer los datos, la comparación de capacidad
+y, en la notebook 3, todos los modelos medidos sobre el mismo test. Los modelos
+quedan en `zFonta/ceia-chess-models`, bajo `pruebas-lichess/`.
+
 ### Ejecución local
 
 ```bash
@@ -455,7 +476,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 581 tests, poco más de un minuto
+pytest -q                          # los 613 tests, alrededor de un minuto
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos
