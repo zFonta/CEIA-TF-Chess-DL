@@ -30,12 +30,14 @@ torch = pytest.importorskip("torch", reason="requires the `train` extra")
 from chessdl.encoding import board_to_tensor  # noqa: E402
 from chessdl.engine.evaluator import Evaluator  # noqa: E402
 from chessdl.engine.match import (  # noqa: E402
+    ENDINGS,
     GameResult,
     MatchResult,
     move_quality,
     opening_positions,
     play_game,
     play_match,
+    pooled_elo,
     stockfish_at_elo,
 )
 from test_engine import MaterialNet  # noqa: E402
@@ -118,6 +120,111 @@ class TestScoreArithmetic:
     def test_the_summary_reports_what_it_measured(self):
         texto = MatchResult([partida(1.0), partida(0.0)], label="prueba").summary()
         assert "prueba" in texto and "Elo" in texto
+
+    def test_the_summary_says_how_the_draws_came_about(self):
+        """Half a point by repetition and half a point held are not the same result."""
+        tablas = [GameResult(0.5, 60, "1/2-1/2", True, 0.01, "threefold_repetition")] * 3
+        tablas += [GameResult(0.5, 200, "*", False, 0.01, "max_plies")]
+        texto = MatchResult(tablas + [partida(0.0)]).summary()
+        assert "3 repeticion triple" in texto
+        assert "1 limite de jugadas" in texto
+
+    def test_a_match_without_draws_does_not_mention_them(self):
+        assert "tablas por" not in MatchResult([partida(1.0), partida(0.0)]).summary()
+
+
+def match_simulado(elo_motor: float, rival: float, n: int, rng) -> MatchResult:
+    """Games drawn from the logistic model itself, so the right answer is known."""
+    esperado = 1.0 / (1.0 + 10 ** ((rival - elo_motor) / 400.0))
+    return MatchResult([partida(1.0 if rng.random() < esperado else 0.0) for _ in range(n)])
+
+
+class TestPooledElo:
+    """One rating from a whole ladder, instead of reading it off one rung."""
+
+    ESCALONES = (1320, 1500, 1700)
+
+    def test_it_recovers_the_rating_the_games_were_drawn_from(self):
+        rng = np.random.default_rng(0)
+        for real in (1400, 1550, 1650):
+            ajuste = pooled_elo({e: match_simulado(real, e, 300, rng) for e in self.ESCALONES})
+            assert ajuste.rating == pytest.approx(real, abs=40)
+            assert ajuste.games == 900
+
+    def test_one_rung_gives_what_that_rung_alone_implies(self):
+        """With nothing to pool, it has to agree with `elo_difference`."""
+        match = MatchResult([partida(1.0)] * 3 + [partida(0.0)])
+        ajuste = pooled_elo({1500: match})
+        assert ajuste.rating == pytest.approx(1500 + match.elo_difference(), abs=1.0)
+
+    def test_an_even_score_puts_the_engine_on_the_rung(self):
+        ajuste = pooled_elo({1500: MatchResult([partida(1.0), partida(0.0)] * 10)})
+        assert ajuste.rating == pytest.approx(1500, abs=1.0)
+
+    def test_a_sweep_at_one_rung_is_pinned_down_by_the_others(self):
+        """The case that sank the single-rung reading: no number at all."""
+        barrida = MatchResult([partida(1.0)] * 30)
+        assert math.isinf(barrida.elo_difference())
+        ajuste = pooled_elo({
+            1320: barrida,
+            1500: MatchResult([partida(1.0)] * 18 + [partida(0.0)] * 12),
+            1700: MatchResult([partida(1.0)] * 9 + [partida(0.0)] * 21),
+        })
+        assert ajuste.bounded
+        assert 1500 < ajuste.rating < 1700
+
+    def test_sweeping_every_rung_is_unbounded_and_says_so(self):
+        todo = {e: MatchResult([partida(1.0)] * 10) for e in self.ESCALONES}
+        nada = {e: MatchResult([partida(0.0)] * 10) for e in self.ESCALONES}
+        assert pooled_elo(todo).rating == math.inf
+        assert pooled_elo(nada).rating == -math.inf
+        assert "encima" in pooled_elo(todo).describe()
+        assert "debajo" in pooled_elo(nada).describe()
+
+    def test_the_interval_narrows_with_more_games(self):
+        def con(n):
+            return pooled_elo({e: MatchResult([partida(1.0), partida(0.0)] * n)
+                               for e in self.ESCALONES})
+        assert con(60).sigma == pytest.approx(con(15).sigma / 2, rel=0.1)
+
+    def test_it_takes_pairs_as_well_as_a_mapping(self):
+        match = MatchResult([partida(1.0)] * 3 + [partida(0.0)])
+        assert pooled_elo([(1500, match)]).rating == pooled_elo({1500: match}).rating
+
+    def test_rungs_without_games_are_ignored_and_none_at_all_is_an_error(self):
+        match = MatchResult([partida(1.0), partida(0.0)])
+        assert pooled_elo({1500: match, 1700: MatchResult()}).games == 2
+        with pytest.raises(ValueError):
+            pooled_elo({1500: MatchResult()})
+
+
+class TestHowGamesEnd:
+    """Each game records why it stopped, without needing an engine to find out."""
+
+    def test_a_dead_position_is_insufficient_material(self, evaluador):
+        resultado = play_game(evaluador, None, chess.engine.Limit(time=0.01),
+                              start_fen="8/8/4k3/8/8/4K3/8/8 w - - 0 1")
+        assert resultado.termination == "insufficient_material"
+        assert resultado.score == 0.5
+
+    def test_a_game_cut_by_the_ply_limit_says_so(self, evaluador):
+        resultado = play_game(evaluador, None, chess.engine.Limit(time=0.01), max_plies=0)
+        assert resultado.termination == "max_plies"
+        assert resultado.score == 0.5
+
+    def test_a_mated_engine_lost_by_checkmate(self, evaluador):
+        tonto = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
+        resultado = play_game(evaluador, None, chess.engine.Limit(time=0.01),
+                              start_fen=tonto, engine_white=True)
+        assert resultado.termination == "checkmate"
+        assert resultado.score == 0.0
+
+    def test_every_ending_has_a_label(self):
+        for motivo in chess.Termination:
+            if motivo is not chess.Termination.VARIANT_WIN and \
+                    motivo is not chess.Termination.VARIANT_LOSS and \
+                    motivo is not chess.Termination.VARIANT_DRAW:
+                assert motivo.name.lower() in ENDINGS
 
 
 class TestOpenings:

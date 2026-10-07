@@ -85,6 +85,35 @@ class TestRoundTrip:
         assert recuperado.config.channels == 16
         assert recuperado.config.blocks == 1
 
+    def test_the_model_comes_back_on_the_device_that_was_asked_for(self, tmp_path):
+        """`device` has to move the model, not just the payload.
+
+        ``map_location`` puts the loaded tensors on the device, but
+        ``load_state_dict`` copies them into parameters that were built on the
+        CPU, so the model stays there. Every caller in the project wrapped the
+        result in an ``Evaluator``, which moves the model itself -- so the first
+        caller that did not hit ``Input type (torch.cuda.FloatTensor) and weight
+        type (torch.FloatTensor) should be the same``, four hours into a run.
+
+        Without a second device this can only check that the answer is
+        self-consistent; the CUDA half is where it would really bite, and it is
+        skipped when there is no GPU.
+        """
+        torch.manual_seed(0)
+        ruta = escribir(tmp_path, ChessResNet(ResNetConfig(channels=16, blocks=1)), RESNET)
+
+        en_cpu = load_local(ruta, device="cpu")
+        assert all(p.device.type == "cpu" for p in en_cpu.parameters())
+
+        if not torch.cuda.is_available():
+            pytest.skip("sin GPU: la mitad que importa de este test no se puede correr")
+
+        en_gpu = load_local(ruta, device="cuda")
+        assert all(p.device.type == "cuda" for p in en_gpu.parameters())
+        # Y que de verdad corra con entrada en GPU, que es el sintoma original.
+        with torch.no_grad():
+            en_gpu.eval()(torch.randn(2, 18, 8, 8, device="cuda"))
+
 
 class TestCli:
     def _checkpoint(self, tmp_path):

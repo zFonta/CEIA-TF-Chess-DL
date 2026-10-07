@@ -47,11 +47,23 @@ def build_model(model_config: dict[str, Any]) -> torch.nn.Module:
 
 
 def load_local(path: str | Path, device: str = "cpu") -> torch.nn.Module:
-    """Rebuild and load the model a checkpoint file holds."""
+    """Rebuild and load the model a checkpoint file holds, **on** ``device``.
+
+    The final ``.to(device)`` is the whole point of that argument and is easy to
+    think redundant: ``map_location`` already puts the *payload* there. But
+    ``load_state_dict`` copies into the parameters the model already has, and
+    :func:`build_model` builds on the CPU, so without this the weights end up
+    back on the CPU and ``device`` silently does nothing.
+
+    It went unnoticed because every caller wrapped the result in an
+    :class:`~chessdl.engine.evaluator.Evaluator`, which moves the model itself.
+    The first caller that did not got ``Input type (torch.cuda.FloatTensor) and
+    weight type (torch.FloatTensor) should be the same`` -- after training.
+    """
     payload = torch.load(Path(path), map_location=device, weights_only=False)
     model = build_model(payload.get("model_config") or {})
     load_checkpoint(path, model, map_location=device)
-    return model
+    return model.to(device)
 
 
 def load_from_hub(

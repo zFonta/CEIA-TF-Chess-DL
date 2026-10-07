@@ -6,7 +6,9 @@ fraction of a percent apart on RMSE can be far apart over a board, or identical.
 This module answers the second question, three ways.
 
 **Games against Stockfish**, with its strength capped via ``UCI_Elo``, to put a
-number on the engine. And against Stockfish *limited to one ply*, which is the
+number on the engine -- fitted against the whole ladder at once by
+:func:`pooled_elo`, never read off a single rung. And against Stockfish *limited
+to one ply*, which is the
 comparison that isolates what this project built: same search, so the only
 difference left is the evaluation function -- one learned from two million
 positions, one written by hand over twenty years.
@@ -32,7 +34,8 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Iterable, Sequence
+from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import chess
@@ -47,6 +50,25 @@ from .search import GameOverError, search
 #: and an unfinished game still has to become a row in the table.
 MAX_PLIES = 200
 
+#: How a game ended, in the words the tables use. The keys are the
+#: ``chess.Termination`` names in lower case, plus the two ways a game here can
+#: stop without the rules ending it.
+#:
+#: Worth recording because a draw is not one thing. "Held Stockfish to a draw"
+#: and "the two engines repeated moves until the rules stopped them" both score
+#: half a point, and only one of them says anything about the evaluation.
+ENDINGS = {
+    "checkmate": "mate",
+    "stalemate": "ahogado",
+    "insufficient_material": "material insuficiente",
+    "seventyfive_moves": "75 jugadas",
+    "fivefold_repetition": "repeticion quintuple",
+    "fifty_moves": "50 jugadas",
+    "threefold_repetition": "repeticion triple",
+    "max_plies": "limite de jugadas",
+    "interrupted": "interrumpida",
+}
+
 
 @dataclass(frozen=True)
 class GameResult:
@@ -57,6 +79,7 @@ class GameResult:
     outcome: str
     engine_white: bool
     seconds_per_move: float
+    termination: str = ""   # a key of ENDINGS; empty for results built by hand
 
     @property
     def won(self) -> bool:
@@ -119,10 +142,89 @@ class MatchResult:
         lines.append(
             f"  diferencia de Elo   {'sin acotar (barrida)' if math.isinf(elo) else f'{elo:+.0f}'}"
         )
+        tablas = Counter(g.termination for g in self.games if g.drawn)
+        if tablas:
+            lines.append("  tablas por          " + ", ".join(
+                f"{n} {ENDINGS.get(motivo, motivo or '?')}"
+                for motivo, n in tablas.most_common()))
         if self.games:
             plies = np.array([g.plies for g in self.games])
             lines.append(f"  largo medio         {plies.mean():.0f} plies")
         return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class PooledElo:
+    """One rating fitted to the results against several rated opponents."""
+
+    rating: float   # +inf / -inf when every opponent was beaten / lost to outright
+    sigma: float    # half-width of the one-sigma interval; nan when unbounded
+    games: int
+
+    @property
+    def bounded(self) -> bool:
+        return math.isfinite(self.rating)
+
+    def describe(self) -> str:
+        if self.rating == math.inf:
+            return "por encima de todos los rivales (les gano todo)"
+        if self.rating == -math.inf:
+            return "por debajo de todos los rivales (perdio todo)"
+        return f"{self.rating:.0f} +- {self.sigma:.0f}"
+
+
+def pooled_elo(
+    results: Mapping[float, MatchResult] | Iterable[tuple[float, MatchResult]],
+    margin: float = 2000.0,
+    step: float = 1.0,
+) -> PooledElo:
+    """Fit one Elo rating to the scores against opponents of known rating.
+
+    ``results`` maps each opponent's rating -- the ``UCI_Elo`` of a ladder rung
+    -- to the match played against it. The rating returned is the one under
+    which those scores are most likely, with the usual logistic expectation and
+    draws counted as half a point.
+
+    The alternative, reading the rating off a single rung, is what a ladder
+    invites and it goes wrong in two ways. It throws away the games against the
+    other rungs. And it is worst exactly where it is most tempting: against a
+    rung the engine dominates, the score rate sits near 1, where a few games
+    move the implied rating by hundreds of points -- and a clean sweep gives no
+    number at all. Fitted against every rung at once, a sweep at one of them is
+    still pinned down by the others; only sweeping all of them in the same
+    direction leaves the rating unbounded, and that comes back as an infinity
+    rather than as a number that looks precise.
+
+    ``sigma`` is half the width of the interval where the log-likelihood stays
+    within 0.5 of its peak: one standard error, under the same model.
+    """
+    pares = results.items() if isinstance(results, Mapping) else results
+    filas = [(float(rival), r) for rival, r in pares if r.games]
+    if not filas:
+        raise ValueError("ningun rival tiene partidas")
+
+    rivales = np.array([rival for rival, _ in filas])
+    partidas = np.array([len(r.games) for _, r in filas], dtype=np.float64)
+    puntos = np.array([r.score_rate for _, r in filas])
+    total = int(partidas.sum())
+
+    if np.all(puntos >= 1.0):
+        return PooledElo(math.inf, float("nan"), total)
+    if np.all(puntos <= 0.0):
+        return PooledElo(-math.inf, float("nan"), total)
+
+    grilla = np.arange(rivales.min() - margin, rivales.max() + margin + step, step)
+    esperado = 1.0 / (1.0 + 10.0 ** ((rivales[None, :] - grilla[:, None]) / 400.0))
+    esperado = np.clip(esperado, 1e-12, 1.0 - 1e-12)
+    verosimilitud = (partidas * (puntos * np.log(esperado)
+                                 + (1.0 - puntos) * np.log(1.0 - esperado))).sum(axis=1)
+
+    mejor = int(np.argmax(verosimilitud))
+    if mejor in (0, len(grilla) - 1):
+        # Further out than the grid: as good as unbounded in that direction.
+        return PooledElo(math.copysign(math.inf, mejor - 0.5), float("nan"), total)
+    dentro = grilla[verosimilitud >= verosimilitud[mejor] - 0.5]
+    return PooledElo(float(grilla[mejor]), float((dentro[-1] - dentro[0]) / 2), total)
 
 
 def opening_positions(
@@ -178,12 +280,21 @@ def play_game(
         gano_blancas = outcome == "1-0"
         score = 1.0 if gano_blancas == engine_white else 0.0
 
+    final = board.outcome(claim_draw=True)
+    if final is not None:
+        termination = final.termination.name.lower()
+    elif len(board.move_stack) >= max_plies:
+        termination = "max_plies"           # adjudicated as a draw, see MAX_PLIES
+    else:
+        termination = "interrupted"
+
     return GameResult(
         score=score,
         plies=len(board.move_stack),
         outcome=outcome,
         engine_white=engine_white,
         seconds_per_move=float(np.mean(tiempos)) if tiempos else float("nan"),
+        termination=termination,
     )
 
 
