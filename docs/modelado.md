@@ -563,6 +563,17 @@ la vez por máxima verosimilitud:
 (puntos por partida contra cada escalón; V / T / D, victorias, tablas y derrotas
 sobre las 90 partidas)
 
+**Cómo se calcula.** El modelo de Elo espera que un motor de Elo $R$ saque
+$p(R, E) = 1 / (1 + 10^{(E-R)/400})$ puntos por partida contra un rival de Elo
+$E$, con las tablas como medio punto. Leído contra un solo escalón, el Elo es
+esa fórmula al revés: $R = E - 400 \log_{10}(1/s - 1)$, con $s$ la tasa de
+puntos. El ajuste conjunto (`pooled_elo` en `chessdl.engine.match`) busca el
+único $R$ que maximiza la log-verosimilitud de todos los resultados,
+$\sum_e n_e [\, s_e \ln p(R, E_e) + (1 - s_e) \ln(1 - p(R, E_e)) ]$, y el ± es
+la mitad del intervalo donde esa log-verosimilitud queda a menos de 0,5 de su
+máximo (un sigma). La explicación completa, con un ejemplo, está en la sección 8
+de la notebook 08.
+
 Las 360 partidas terminaron por las reglas —mate, ahogado, repetición—, ninguna
 interrumpida y ninguna con una jugada ilegal: es el requerimiento 2.4, que pide al
 menos 50 partidas contra Stockfish a Elo bajo con los porcentajes de victorias,
@@ -621,6 +632,16 @@ En orden de costo creciente, y todas dirigidas a la misma limitación:
    ampliar el dataset no requiere bajar otro dump de Lichess: solo seguir
    etiquetando. Es la palanca que este bloque **demostró** que hace falta, en vez
    de suponerla.
+
+   El apéndice (`notebooks/apendice/`) la puso a prueba con el dump público de
+   evaluaciones de Lichess, que ya trae las posiciones etiquetadas: con la misma
+   ResNet, el RMSE bajó un 7 % por cada duplicación de datos hasta 30 M de
+   posiciones sin aplanarse, y sobre el test del proyecto ese modelo juega unos
+   230 puntos de Elo por encima del de la memoria a 2 plies. Duplicar la
+   profundidad de la red, en cambio, compró un 2 % de RMSE y nada medible en el
+   tablero. Con una salvedad: esos modelos no sólo vieron más posiciones, vieron
+   otras —otro Stockfish, más mates y más táctica—, así que no toda la diferencia
+   es de volumen.
 
 ### Una salvedad sobre "mismo presupuesto"
 

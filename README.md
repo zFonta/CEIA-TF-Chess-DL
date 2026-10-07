@@ -220,13 +220,20 @@ llegar a decenas de millones sin etiquetar nada.
 | `lichess_1_survey.ipynb` | Recorrer el dump y decidir qué volúmenes entran · **CPU** |
 | `lichess_2_entrenamiento.ipynb` | La ResNet de la memoria con 5, 10 y 30 millones de posiciones, y una el doble de profunda con 30 · **GPU con alta RAM** |
 | `lichess_3_elo.ipynb` | Las mediciones de la 08 sobre esos cuatro modelos —RMSE en el test del proyecto, tiempo por jugada, pérdida en centipeones, Elo a 1 y 2 plies— y la comparación con los dos de la memoria |
-| `lichess_4_jugar.ipynb` | El tablero de la 09, apuntado a esos modelos |
+| `lichess_4_jugar.ipynb` | El tablero de la 09 con los dos motores más fuertes del apéndice y la ResNet de la memoria, y un panel que los compara posición por posición |
 
 Sus números **no son comparables en nivel** con los de la memoria —otras
 etiquetas, otra profundidad de Stockfish, menos épocas—. Lo que el apéndice
 aporta es la forma de la curva al crecer los datos, la comparación de capacidad
 y, en la notebook 3, todos los modelos medidos sobre el mismo test. Los modelos
 quedan en `zFonta/ceia-chess-models`, bajo `pruebas-lichess/`.
+
+**Lo que encontró:** el RMSE baja un 7 % por cada duplicación de datos, sin
+aplanarse a 30 M de posiciones. Sobre el test del proyecto, con 10 M ya se
+supera a la ResNet de la memoria en todas las medidas, y con 30 M el motor juega
+unos 230 puntos de Elo por encima a 2 plies (1762 ± 46 contra 1534 ± 40) y empata
+con Stockfish cuando los dos buscan a un ply. Duplicar la profundidad de la red
+compra un 2 % de RMSE y nada medible en el tablero: la palanca es el dato.
 
 ### Ejecución local
 

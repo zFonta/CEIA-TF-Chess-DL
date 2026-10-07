@@ -16,7 +16,13 @@ NOTEBOOK_DIR = Path(__file__).resolve().parents[1] / "notebooks"
 
 
 def notebook_paths() -> list[Path]:
-    return sorted(NOTEBOOK_DIR.glob("*.ipynb"))
+    """The main sequence, then the appendix: each folder is read in its own order."""
+    return [*sorted(NOTEBOOK_DIR.glob("*.ipynb")), *sorted(NOTEBOOK_DIR.glob("apendice/*.ipynb"))]
+
+
+def same_series(path: Path) -> list[Path]:
+    """The notebooks read in sequence with this one: the ones in its folder."""
+    return [p for p in notebook_paths() if p.parent == path.parent]
 
 
 def code_sources(path: Path) -> list[str]:
@@ -88,15 +94,17 @@ def markdown_sources(path: Path) -> list[str]:
 def test_every_notebook_but_the_last_points_at_the_next_one(notebook: Path):
     """The set is meant to be read in order, and each one says where to go next.
 
-    Only the last is exempt, because there is nothing honest to point at until
-    the next block exists. That exemption is by position, not by name, so adding
-    a notebook makes this fail on the one that used to be last -- which is the
-    moment to give it a pointer.
+    Only the last of each series -- the main one and the appendix -- is exempt,
+    because there is nothing honest to point at until the next block exists.
+    That exemption is by position, not by name, so adding a notebook makes this
+    fail on the one that used to be last -- which is the moment to give it a
+    pointer.
     """
-    if notebook == notebook_paths()[-1]:
-        pytest.skip("la ultima no tiene siguiente todavia")
+    serie = same_series(notebook)
+    if notebook == serie[-1]:
+        pytest.skip("la ultima de su serie no tiene siguiente")
 
-    siguiente = notebook_paths()[notebook_paths().index(notebook) + 1]
+    siguiente = serie[serie.index(notebook) + 1]
     texto = "\n".join(markdown_sources(notebook))
 
     assert "Proximo paso" in texto or "Próximo paso" in texto, (
