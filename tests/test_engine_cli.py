@@ -135,6 +135,17 @@ class TestCli:
         main(["--checkpoint", str(ruta), "--fen", fen])
         assert "Juegan         blancas" in capsys.readouterr().out
 
+    def test_the_depth_can_be_chosen(self, tmp_path, capsys):
+        """Depth 2 is what the ladder measured as the stronger engine."""
+        ruta = self._checkpoint(tmp_path)
+        main(["--checkpoint", str(ruta), "--depth", "2"])
+        assert "a 2 plies" in capsys.readouterr().out
+
+    def test_one_ply_is_the_default(self, tmp_path, capsys):
+        ruta = self._checkpoint(tmp_path)
+        main(["--checkpoint", str(ruta)])
+        assert "a 1 ply" in capsys.readouterr().out
+
     def test_self_play_reports_the_time_budget(self, tmp_path, capsys):
         """Requirement 1.7 is answered with a measurement, not a promise."""
         ruta = self._checkpoint(tmp_path)

@@ -2,6 +2,7 @@
 
     python -m chessdl.scripts.play --checkpoint ./checkpoints/campana2-warmup/checkpoint_best.pt
     python -m chessdl.scripts.play --run-name campana2-warmup --fen "<FEN>"
+    python -m chessdl.scripts.play --run-name campana2-warmup --fen "<FEN>" --depth 2
     python -m chessdl.scripts.play --run-name campana2-warmup --self-play 40
 
 Evaluations are printed from **white's point of view** and in centipawns, which
@@ -45,6 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Posicion a analizar (por defecto, la inicial).")
     que.add_argument("--self-play", type=int, default=0, metavar="N",
                      help="Jugar N jugadas contra si mismo y mostrar la partida.")
+    que.add_argument("--depth", type=int, default=1, choices=(1, 2),
+                     help="Plies de busqueda: 1 es la del plan (requerimiento 1.6); "
+                          "2 juega unos 400 puntos de Elo mas y sigue dentro de los 5 s.")
     que.add_argument("--top", type=int, default=5,
                      help="Cuantas jugadas mostrar en el analisis.")
     que.add_argument("--seed", type=int, default=None,
@@ -69,8 +73,8 @@ def cargar_evaluador(args) -> Evaluator:
     return Evaluator(modelo, device=args.device)
 
 
-def analizar(board: chess.Board, evaluador: Evaluator, top: int, rng) -> None:
-    resultado = search(board, evaluador, rng=rng)
+def analizar(board: chess.Board, evaluador: Evaluator, top: int, rng, depth: int = 1) -> None:
+    resultado = search(board, evaluador, depth=depth, rng=rng)
     blancas = value_white(board, resultado.value)
 
     print(board)
@@ -81,19 +85,21 @@ def analizar(board: chess.Board, evaluador: Evaluator, top: int, rng) -> None:
     print(f"Evaluacion     {blancas:+.4f} en escala value  "
           f"({value_to_cp(blancas):+.0f} centipeones, vista de las blancas)")
     print(f"Tiempo         {resultado.seconds * 1000:.0f} ms "
-          f"sobre {len(resultado.ranked)} jugadas legales")
+          f"sobre {len(resultado.ranked)} jugadas legales, a {depth} "
+          f"{'ply' if depth == 1 else 'plies'}")
     print()
     print(resultado.table(board, top=top))
 
 
-def auto_partida(board: chess.Board, evaluador: Evaluator, jugadas: int, rng) -> None:
+def auto_partida(board: chess.Board, evaluador: Evaluator, jugadas: int, rng,
+                 depth: int = 1) -> None:
     empezo = time.perf_counter()
     tiempos: list[float] = []
     san: list[str] = []
 
     for _ in range(jugadas):
         try:
-            resultado = search(board, evaluador, rng=rng)
+            resultado = search(board, evaluador, depth=depth, rng=rng)
         except GameOverError:
             break
         tiempos.append(resultado.seconds)
@@ -124,9 +130,9 @@ def main(argv: list[str] | None = None) -> int:
 
     board = chess.Board(args.fen)
     if args.self_play:
-        auto_partida(board, evaluador, args.self_play, rng)
+        auto_partida(board, evaluador, args.self_play, rng, depth=args.depth)
     else:
-        analizar(board, evaluador, args.top, rng)
+        analizar(board, evaluador, args.top, rng, depth=args.depth)
     return 0
 
 

@@ -145,6 +145,49 @@ redes sacan 0,28 y 0,25 puntos por partida, sin ganar ninguna, y casi todas sus
 tablas son por repetición. Ese rival no tiene un Elo calibrado, así que el
 resultado no se traduce a una escala.
 
+## Arquitectura del sistema
+
+Diagrama en bloques del sistema completo (entregable del plan). Los otros dos
+diagramas están en [`docs/pipeline.md`](docs/pipeline.md) —el flujo del pipeline
+de datos— y en [`docs/modelado.md`](docs/modelado.md) —la arquitectura de cada
+red, capa por capa—.
+
+```mermaid
+flowchart LR
+    subgraph D["Datos · bloque 3"]
+        L["Lichess<br/>partidas públicas CC0"] --> F["Filtro<br/>Elo ≥ 2200 a ambos,<br/>Blitz · Rapid · Classical"]
+        F --> M["Muestreo<br/>4 posiciones por partida,<br/>2 con cada color al turno"]
+        M --> S["Stockfish 17.1<br/>profundidad 12"]
+        S --> N["Normalización<br/>tanh(cp / 400)"]
+        N --> DS[("Dataset Parquet<br/>Hugging Face")]
+    end
+    subgraph R["Red neuronal · bloque 4"]
+        DS --> E["Codificación<br/>18 planos de 8 × 8,<br/>vista del que mueve"]
+        E --> T["Entrenamiento<br/>ResNet · Transformer"]
+        T --> W[("Pesos<br/>Hugging Face")]
+    end
+    subgraph MO["Motor · bloque 5"]
+        W --> EV["Evaluador<br/>la red, y las reglas<br/>para lo ya decidido"]
+        EV --> B["Búsqueda negamax<br/>1 o 2 plies"]
+        B --> CLI["Línea de comandos<br/>jugada + evaluación en cp"]
+        B --> UI["Tablero interactivo<br/>notebook 09"]
+    end
+    subgraph EVA["Evaluación · bloque 6"]
+        B --> P["Partidas contra<br/>Stockfish UCI_Elo"]
+        B --> Q["Pérdida en centipeones<br/>contra Stockfish a 12"]
+    end
+```
+
+## Documentación
+
+| documento | para qué |
+|---|---|
+| [`docs/manual_usuario.md`](docs/manual_usuario.md) | Cómo jugar contra el motor y cómo leer sus evaluaciones, sin saber programar |
+| [`docs/informe_evaluacion.md`](docs/informe_evaluacion.md) | Todos los resultados en un lugar: RMSE, pérdida en centipeones, partidas, Elo, y cada requerimiento con su evidencia |
+| [`docs/dataset_card.md`](docs/dataset_card.md) | El dataset: procedencia, etiquetado, transformaciones, validación y limitaciones |
+| [`docs/pipeline.md`](docs/pipeline.md) | El pipeline de datos: diagrama de flujo, decisiones y lo que costó correrlo |
+| [`docs/modelado.md`](docs/modelado.md) | Las redes: arquitecturas, diagramas, campañas, diagnósticos y lo que dijeron las partidas |
+
 ## Qué hace el pipeline
 
 ```
@@ -271,7 +314,8 @@ Jugar o analizar con el motor (requerimientos 1.6, 1.7, 4.1 y 4.2):
 
 ```bash
 # Analizar una posicion: la jugada elegida y las alternativas, en centipeones
-python -m chessdl.scripts.play --run-name campana2-warmup --fen "<FEN>"
+# (--depth 2 mira tambien la respuesta del rival y juega bastante mejor)
+python -m chessdl.scripts.play --run-name campana2-warmup --fen "<FEN>" --depth 2
 
 # Una partida del motor contra si mismo, con el tiempo por jugada medido
 python -m chessdl.scripts.play --run-name campana2-warmup --self-play 40
@@ -306,6 +350,8 @@ se puede continuar desde cualquier máquina.
 | Pesos, métricas e historiales | `zFonta/ceia-chess-models` — el entregable del bloque 4 |
 | Extracto PGN filtrado | `zFonta/ceia-chess-work` |
 | Estado de reanudación | `zFonta/ceia-chess-work` |
+| Posiciones del apéndice (dump de evaluaciones, parseado) | `zFonta/ceia-chess-work`, bajo `lichess_eval/` |
+| Modelos del apéndice | `zFonta/ceia-chess-models`, bajo `pruebas-lichess/` |
 | Caché de tensores | local, descartable — se reconstruye desde los FEN |
 | Cache de trabajo | local, descartable |
 
@@ -483,7 +529,7 @@ src/chessdl/
 `test_*`. No hay que importar ni invocar nada a mano.
 
 ```bash
-pytest -q                          # los 613 tests, alrededor de un minuto
+pytest -q                          # los 615 tests, alrededor de un minuto
 pytest tests/test_encoding.py -v   # un archivo, mostrando test por test
 pytest -k mirror -v                # solo los que matcheen ese texto en el nombre
 pytest --collect-only -q           # listarlos sin ejecutarlos
